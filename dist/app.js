@@ -3,7 +3,7 @@ import { translations } from './translations.js';
 const $=id=>document.getElementById(id);
 const saved=k=>{try{return localStorage.getItem(k)}catch{return null}};
 const save=(k,v)=>{try{localStorage.setItem(k,v)}catch{}};
-let lang=saved('snow-language')==='en'?'en':'zh', unit=saved('snow-unit')==='inch'?'inch':'cm', key=saved('snow-resort')||'brighton';
+let lang=saved('snow-language')==='zh'?'zh':'en', unit=saved('snow-unit')==='inch'?'inch':'cm', key=saved('snow-resort')||'brighton';
 if(!Object.hasOwn(resorts,key))key='brighton';
 let data=null, selected=0, request=0, table=false, loading=false, failed=false, timedOut=false;
 const t=(zh,en)=>lang==='en'?en:zh;
