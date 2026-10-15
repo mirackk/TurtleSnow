@@ -19,6 +19,6 @@
 
 ## Remaining verification
 
-The new Cloudflare hostname was enabled successfully, but HTTPS initially failed with TLS handshake errors in curl and the browser. No certificate verification was bypassed. HTTP works; HTTPS anonymous access and production browser QA require a successful recheck after domain/certificate provisioning. Cron registration is verified; a naturally occurring production hourly execution has not yet been observed.
+Initial TLS provisioning errors resolved during the session. Anonymous HTTPS homepage and both resort APIs now return 200. Repeat HTTPS API requests return identical snapshots with 15 days and the original successful fetch timestamp. Production browser confirmed turtleSnow branding, actual forecast data, resort switching and inch conversion. No certificate verification was bypassed. Cron registration is verified; a naturally occurring production hourly execution has not yet been observed.
 
 The old Sites demo remains on its original deployment. The new cached implementation is hosted in the user's Cloudflare account. GitHub push alone does not trigger deployment; use `npm run deploy` after browser OAuth login.
