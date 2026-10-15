@@ -79,3 +79,13 @@ Brighton parking now has its own Parking tab. Snow overview and Daily weather co
 Further inspection on 2026-10-15 confirmed that the publicly served Inflow reservation client defines read/query routes `/calendar-availability` and `/calendar-rates` (POST). However, following the official Brighton welcome page's Get started button redirected to an authentication page explicitly requiring an Inflow account before continuing to the booking calendars. A documented public/anonymous third-party data interface has not been verified, nor have partner API pricing, redistribution permission or passholder-pool access. The presence of client routes is not proof of free public API access. No credentials were collected, authentication bypassed, reservations created or third-party accounts registered.
 
 Evidence: official entry https://reserve.inflowparking.com/qr/ParkBrightonResort/welcome ; the public bundle inspected was https://reserve.inflowparking.com/assets/index-CU863i2U.js . No live availability integration has been claimed or deployed.
+
+### Feedback
+The floating bilingual Feedback button submits anonymously to `POST /api/feedback`.
+Cloudflare D1 database **turtlesnow-feedback**, table **feedback**, stores timestamp (UTC), category, message, optional email, selected resort and language. View submissions in Cloudflare → Storage & databases → D1 → turtlesnow-feedback → Studio:
+
+```sql
+SELECT id, created_at, category, message, email, resort, language
+FROM feedback ORDER BY id DESC LIMIT 100;
+```
+There is no public endpoint for reading feedback. Same-origin JSON, bounded input, a honeypot and an atomic database limit of three submissions per IP hash per rolling hour reduce spam. IP hashes rotate daily (the limit resets at UTC midnight); raw IP addresses are not stored. This is basic abuse protection, not a CAPTCHA. Review and delete feedback when no longer needed. Schema is in `migrations/0001_feedback.sql`; apply with `wrangler d1 migrations apply turtlesnow-feedback --remote` before deploying.

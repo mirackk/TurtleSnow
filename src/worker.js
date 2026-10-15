@@ -1,3 +1,4 @@
+import { feedback } from './feedback.js';
 import { hourlyFields, localDate } from '../dist/hourly.js';
 import { resorts } from '../dist/resorts.js';
 export { resorts };
@@ -59,6 +60,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
+    if (url.pathname === '/api/feedback') return feedback(request, env);
     const headers = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
     if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405, headers: { ...headers, Allow: 'GET' } });
     if (url.pathname !== '/api/forecast') return Response.json({ error: 'Not found' }, { status: 404, headers });
