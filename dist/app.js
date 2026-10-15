@@ -1,3 +1,4 @@
+import { skiOutlook } from './outlook.js';
 import { dayHours, summarize } from './hourly.js';
 import { brightonParking, parkingStatus } from './parking.js';
 import { resorts } from './resorts.js';
@@ -74,7 +75,7 @@ function render(){
  if(!data){
  ['sum1','sum2','sum3'].forEach(id=>$(id).textContent='—');['range1','range2','range3'].forEach(id=>$(id).textContent=t('等待预报','Awaiting forecast'));
  $('chart').replaceChildren();$('rows').replaceChildren();$('total').textContent=t('正在加载','Loading');$('detail').textContent=failed?t('数据暂不可用；请刷新重试。','Data unavailable. Please refresh to retry.'):t('正在读取预报…','Loading forecast…');
- $('outlook-title').textContent=failed?t('等待天气数据','Awaiting weather data'):t('正在分析降雪窗口','Finding snow windows');$('outlook').textContent='';return;
+ $('outlook-title').textContent=failed?t('等待天气数据','Awaiting weather data'):t('正在分析降雪窗口','Finding snow windows');$('outlook').textContent='';$('outlook-note').textContent='';$('outlook-stamp').textContent='';return;
  }
  const d=data.daily,falls=d.snowfall_sum,total=falls.reduce((a,b)=>a+b,0),max=Math.max(...falls,1),localToday=today();
  for(let j=0;j<3;j++){const start=j*5,end=start+5;$('sum'+(j+1)).innerHTML=num(falls.slice(start,end).reduce((a,b)=>a+b,0))+`<span>${unit==='inch'?'in':'cm'}</span>`;$('range'+(j+1)).textContent=date(d.time[start])+' – '+date(d.time[end-1])+(j===2?t(' · 远期趋势',' · Trend'):'');}
@@ -84,9 +85,11 @@ function render(){
  $('chart').querySelectorAll('button').forEach(b=>b.onclick=()=>{selectDay(Number(b.dataset.index),true)});scroll.scrollLeft=previousScroll;
  $('rows').innerHTML=d.time.map((day,i)=>`<tr><td><button class="date-link" data-day="${i}" aria-controls="hourly-panel">${date(day)} ${weekday(day)}${i>6?t(' · 趋势',' · Trend'):''} ↗</button></td><td style="color:${i>6?'var(--purple)':'var(--blue)'}">${snow(falls[i])}</td><td>${Math.round(d.temperature_2m_min[i])}° / ${Math.round(d.temperature_2m_max[i])}°C</td><td>${Math.round(d.wind_speed_10m_max[i])} km/h</td></tr>`).join('');
  $('rows').querySelectorAll('[data-day]').forEach(b=>b.onclick=()=>{selectDay(Number(b.dataset.day));$('hourly-panel')?.scrollIntoView({behavior:'smooth',block:'start'})});
- const peak=falls.indexOf(Math.max(...falls));
- $('outlook-title').textContent=total>0?t(`${date(d.time[peak])} 降雪信号最强`,`Strongest snow signal: ${date(d.time[peak])}`):t('未来 15 天暂无明显降雪信号','No notable snow signal in the next 15 days');
- $('outlook').textContent=total>0?t(`当前模型预计 ${resorts[key].name} 15 天累计新增降雪 ${snow(total)}，其中 ${date(d.time[peak])} 约 ${snow(falls[peak])}。`,`The current model forecasts ${snow(total)} of snow at ${resorts[key].name} over 15 days, with about ${snow(falls[peak])} on ${date(d.time[peak])}. `)+(peak>6?t('主要信号在一周之后，建议临近 3–5 天再确认雪量。','The main signal is over a week away. Recheck amounts 3–5 days before your trip.'):t('出发前继续关注预报更新、雪场开放与道路情况。','Check forecast updates, resort operations and road conditions before traveling.')):t('当前模型预计新增降雪为零。后续天气过程仍可能变化。','The current model predicts no new snow. Weather patterns may still change.');detail();
+ const outlook=skiOutlook(data,{lang,snow,date,timezone:resorts[key].timezone});
+ $('outlook-title').textContent=outlook.title;
+ $('outlook').textContent=outlook.paragraphs.join('\n\n');
+ $('outlook-note').textContent=outlook.note;
+ $('outlook-stamp').textContent=t('对应天气数据：','Based on weather data: ')+new Date(data.updatedAt).toLocaleString(locale(),{timeZone:resorts[key].timezone})+(data.stale?t(' · 数据已过期，请谨慎参考',' · Stale data — use caution'):'');detail();
 }
 async function load(){
  const id=++request;data=null;selected=0;hourlyOpen=false;loading=true;failed=false;timedOut=false;render();document.querySelector('.chart-panel').classList.add('loading');

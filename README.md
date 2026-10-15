@@ -89,3 +89,6 @@ SELECT id, created_at, category, message, email, resort, language
 FROM feedback ORDER BY id DESC LIMIT 100;
 ```
 There is no public endpoint for reading feedback. Same-origin JSON, bounded input, a honeypot and an atomic database limit of three submissions per IP hash per rolling hour reduce spam. IP hashes rotate daily (the limit resets at UTC midnight); raw IP addresses are not stored. This is basic abuse protection, not a CAPTCHA. Review and delete feedback when no longer needed. Schema is in `migrations/0001_feedback.sql`; apply with `wrangler d1 migrations apply turtlesnow-feedback --remote` before deploying.
+
+### Ski experience outlook
+`dist/outlook.js` generates a bilingual, rule-based experience and forecast summary without any AI service or extra upstream requests. It uses the last three complete local days of modeled snowfall, the next three forecast days, temperature crossing signals, forecast wind/gusts and later snow trends. It explicitly does not assess base depth, observed surfaces, operations, coverage or avalanche safety. Thresholds (10 cm refresh, 30 km/h wind / 50 km/h gust) are simple presentation heuristics, not validated ski-quality or safety ratings. Data timestamp and stale warnings remain visible. This version does not call an LLM and adds no model fees.
