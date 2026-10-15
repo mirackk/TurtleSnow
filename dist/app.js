@@ -170,19 +170,19 @@ function renderParking(){
 
 function renderExperience(){
  const outlook=skiOutlook(data,{lang,snow,date,timezone:resorts[key].timezone}),s=data.summary;
- const usable=s&&Date.now()-Date.parse(s.generatedAt)<24*3600000&&s.forecastDates?.[0]===data.daily.time[0]&&s[lang]?.text;
+ const usable=s?.windowDays===7&&Date.now()-Date.parse(s.generatedAt)<24*3600000&&s.forecastDates?.[0]===data.daily.time[0]&&s[lang]?.text;
  const stamp=v=>new Date(v).toLocaleString(locale(),{timeZone:resorts[key].timezone,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
- $('summary-intro').textContent=t('先看这一段，快速了解滑雪体验与未来变化。','Start here — your ski outlook, without decoding the charts.');
+ $('summary-intro').textContent=t('先看这一段，快速了解过去七天与未来七天的滑雪体验。','Start here — the past week and next week, without decoding the charts.');
  $('outlook-title').textContent=usable&&!/closed|outlook$|关闭|停业|预报$|展望$/i.test(s[lang].headline)?s[lang].headline:outlook.title;
  $('outlook').textContent=usable?s[lang].text:outlook.paragraphs.slice(1,4).join(' ');
  $('summary-feel').textContent=t('雪面体验推测：','Surface outlook: ')+outlook.paragraphs[2];
- $('outlook-note').textContent=t('体验推测，不代表实测雪面、覆盖或安全评估。历史模型降雪不等于雪场实测。','An experience estimate, not an assessment of observed surfaces, coverage or safety. Historical modeled snow is not resort-measured snow.');
+ $('outlook-note').textContent=t('体验推测，不代表实测雪面、覆盖或安全评估。历史模型降雪不等于雪场实测。未来第 4–7 天以趋势为主，雪量和时段仍可能变化。','An experience estimate, not an assessment of observed surfaces, coverage or safety. Historical modeled snow is not resort-measured snow. Days 4–7 are trends; amounts and timing may change.');
  $('outlook-stamp').textContent=usable?t('AI 摘要 · 每 12 小时尝试更新 · 生成于 ','AI summary · Refreshes every 12 hours · Generated ')+stamp(s.generatedAt)+t(' · 依据预报 ',' · Forecast as of ')+stamp(s.forecastAt):t('规则摘要后备 · AI 摘要暂不可用 · 依据预报 ','Rule-based fallback · AI summary unavailable · Forecast as of ')+stamp(data.updatedAt);
  if(data.stale)$('outlook-stamp').textContent+=t(' · 天气数据已过期',' · Weather data is stale');
  const report=data.report;
  $('summary-status').textContent=report?.status==='Closed'?t('官方报告：雪场关闭。以下仅为天气展望，不代表当前可滑。','Official report: resort closed. This is a weather outlook, not current skiability.'):report?.status==='outside_winter'?t('官网目前非冬季雪况模式；以下仅为天气展望。','The official site is outside winter reporting mode; this is a weather outlook.'):'';
- const history=data.history?.daily?.snowfall_sum?.slice(-3),recent=history?.length===3&&history.every(Number.isFinite)?history.reduce((a,b)=>a+b,0):null;
- const items=[[t('过去 3 个完整日','Past 3 complete days'),recent,t('模型估算','Modeled snow')],[t('未来 3 天','Next 3 days'),data.daily.snowfall_sum.slice(0,3).reduce((a,b)=>a+b,0),t('预报新增降雪','Forecast new snow')],[t('Base / 基础雪深','Base depth'),report?.baseCm,t('雪场官方报告','Resort-reported')],[t('官方过去 24 小时','Official past 24h'),report?.snow24Cm,t('雪场报告新增降雪','Resort-reported new snow')]];
+ const history=data.history?.daily?.snowfall_sum?.slice(-7),recent=history?.length===7&&history.every(Number.isFinite)?history.reduce((a,b)=>a+b,0):null;
+ const items=[[t('过去 7 个完整日','Past 7 complete days'),recent,t('模型估算','Modeled snow')],[t('未来 7 天','Next 7 days'),data.daily.snowfall_sum.slice(0,7).reduce((a,b)=>a+b,0),t('预报新增降雪','Forecast new snow')],[t('Base / 基础雪深','Base depth'),report?.baseCm,t('雪场官方报告','Resort-reported')],[t('官方过去 24 小时','Official past 24h'),report?.snow24Cm,t('雪场报告新增降雪','Resort-reported new snow')]];
  $('summary-facts').replaceChildren(...items.map(([label,value,note])=>{const div=document.createElement('div');div.className='summary-fact';const a=document.createElement('span'),b=document.createElement('strong'),c=document.createElement('span');a.textContent=label;b.textContent=Number.isFinite(value)?snow(value):'—';c.textContent=Number.isFinite(value)?note:t('暂未公布／未接入','Not published / not connected');div.append(a,b,c);return div}));
  $('summary-source').replaceChildren();
  if(report){const a=document.createElement('a');a.href=report.url;a.target='_blank';a.rel='noreferrer';a.textContent=t('官方雪况 ↗','Official snow report ↗');$('summary-source').append(a,document.createTextNode(t(' · 报告时间：',' · Report time: ')+report.reportedAt+t(' · 获取于 ',' · Retrieved ')+stamp(report.fetchedAt)+(report.stale?t(' · 旧数据，请查官网',' · Old data; verify officially'):'')+(report.seasonHidden?t(' · 官网暂未公布冬季雪量指标',' · Winter snow metrics are not currently published'):'')+t('。雪深不代表所有区域覆盖。','. Base depth does not establish coverage across terrain.')))}
