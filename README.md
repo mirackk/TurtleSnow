@@ -71,3 +71,11 @@ Brighton has a client-side general-parking rule checker with date and arrival ti
 Sources checked 2026-10-15: https://www.parkbrightonresort.com/reservenski and https://www.brightonresort.com/getting-here-and-parking. The verified operator calendar covers Dec 4, 2026–Apr 18, 2027; dates outside it are unconfirmed, not assumed reservation-free. General parking requires reservations 07:00–12:00 Fri–Sun and published holidays, except Dec 25. Jan 19 and Feb 16 are unconfirmed because the resort FAQ and operator calendar disagree. Preferred Parking has separate rules and is excluded from the general-parking result. Summer/opening/closing dates are not inferred.
 
 The UI labels live availability as not connected and separates rule status from inventory. Free passholder parking still requires reservations when applicable; reservation-free parking is not a guarantee of an open space. API access and pricing have not been confirmed with Inflow; no operator has been contacted.
+
+### Parking tab and availability research
+
+Brighton parking now has its own Parking tab. Snow overview and Daily weather contain only weather content; Parking hides the weather sections and weather refresh button. Switching away from Brighton returns to weather and hides the Brighton-specific Parking tab.
+
+Further inspection on 2026-10-15 confirmed that the publicly served Inflow reservation client defines read/query routes `/calendar-availability` and `/calendar-rates` (POST). However, following the official Brighton welcome page's Get started button redirected to an authentication page explicitly requiring an Inflow account before continuing to the booking calendars. A documented public/anonymous third-party data interface has not been verified, nor have partner API pricing, redistribution permission or passholder-pool access. The presence of client routes is not proof of free public API access. No credentials were collected, authentication bypassed, reservations created or third-party accounts registered.
+
+Evidence: official entry https://reserve.inflowparking.com/qr/ParkBrightonResort/welcome ; the public bundle inspected was https://reserve.inflowparking.com/assets/index-CU863i2U.js . No live availability integration has been claimed or deployed.

@@ -7,6 +7,7 @@ const saved=k=>{try{return localStorage.getItem(k)}catch{return null}};
 const save=(k,v)=>{try{localStorage.setItem(k,v)}catch{}};
 let lang=saved('snow-language')==='zh'?'zh':'en', unit=saved('snow-unit')==='inch'?'inch':'cm', key=saved('snow-resort')||'brighton';
 if(!Object.hasOwn(resorts,key))key='brighton';
+let parkingActive=false;
 let parkingDay=null,parkingTime='09:00';
 let hourlyOpen=false;
 let data=null, selected=0, request=0, table=false, loading=false, failed=false, timedOut=false;
@@ -68,7 +69,7 @@ function renderHistory(){
  $('history-days').innerHTML=h.time.map((day,i)=>`<div class="history-day" aria-label="${day}, ${t('历史模型降雪','historical modeled snowfall')} ${snow(h.snowfall_sum[i])}"><div class="history-bar-space"><span class="bar-value">${num(h.snowfall_sum[i])}</span><div class="history-bar" style="height:${Math.max(3,h.snowfall_sum[i]/max*64)}px"></div></div><div class="weekday">${weekday(day)}</div><div class="date">${date(day)}</div></div>`).join('');
 }
 function render(){
- staticText();status();renderParking();renderHistory();renderHourly();['cm','inch'].forEach(u=>{$(u).classList.toggle('active',u===unit);$(u).setAttribute('aria-pressed',String(u===unit))});
+ staticText();status();applyView();renderParking();renderHistory();renderHourly();['cm','inch'].forEach(u=>{$(u).classList.toggle('active',u===unit);$(u).setAttribute('aria-pressed',String(u===unit))});
  if(!data){
  ['sum1','sum2','sum3'].forEach(id=>$(id).textContent='—');['range1','range2','range3'].forEach(id=>$(id).textContent=t('等待预报','Awaiting forecast'));
  $('chart').replaceChildren();$('rows').replaceChildren();$('total').textContent=t('正在加载','Loading');$('detail').textContent=failed?t('数据暂不可用；请刷新重试。','Data unavailable. Please refresh to retry.'):t('正在读取预报…','Loading forecast…');
@@ -96,12 +97,25 @@ async function load(){
  }catch(error){if(id!==request)return;failed=true;timedOut=error.name==='AbortError';}
  finally{clearTimeout(timer);if(id===request){loading=false;document.querySelector('.chart-panel').classList.remove('loading');render();}}
 }
-$('resort').onchange=e=>{key=e.target.value;parkingDay=null;save('snow-resort',key);document.querySelector('.scroll').scrollLeft=0;load()};
+$('resort').onchange=e=>{key=e.target.value;if(key!=='brighton')parkingActive=false;parkingDay=null;save('snow-resort',key);document.querySelector('.scroll').scrollLeft=0;load()};
 $('language').onchange=e=>{lang=e.target.value==='en'?'en':'zh';save('snow-language',lang);render()};
 $('refresh').onclick=load;
 ['cm','inch'].forEach(u=>$(u).onclick=()=>{unit=u;save('snow-unit',u);render()});
-function tab(showTable){table=showTable;$('table-view').classList.toggle('hidden',!table);$('chart-view').classList.toggle('hidden',table);['table','chart'].forEach(name=>{const active=(name==='table')===table;$(name+'-tab').classList.toggle('active',active);$(name+'-tab').setAttribute('aria-pressed',String(active))});render()}
-$('table-tab').onclick=()=>tab(true);$('chart-tab').onclick=()=>tab(false);load();
+function applyView(){
+ const parkingTab=$('parking-tab');if(!parkingTab)return;
+ parkingTab.textContent=t('停车预约','Parking');parkingTab.classList.toggle('hidden',key!=='brighton');
+ $('weather-content')?.classList.toggle('hidden',parkingActive);
+ $('refresh').classList.toggle('hidden',parkingActive);
+ $('table-view').classList.toggle('hidden',!table);$('chart-view').classList.toggle('hidden',table);
+ for(const name of ['chart','table','parking']){
+  const active=name==='parking'?parkingActive:!parkingActive&&((name==='table')===table);
+  $(name+'-tab').classList.toggle('active',active);$(name+'-tab').setAttribute('aria-pressed',String(active));
+ }
+}
+function tab(showTable){parkingActive=false;table=showTable;render()}
+$('table-tab').onclick=()=>tab(true);$('chart-tab').onclick=()=>tab(false);
+$('parking-tab')?.addEventListener('click',()=>{parkingActive=true;render()});
+load();
 
 function selectDay(index,reveal=false){selected=index;parkingDay=data.daily.time[index];renderParking();hourlyOpen=true;detail();if(reveal)$('hourly-panel')?.scrollIntoView({behavior:'smooth',block:'start'})}
 $('hourly-close')?.addEventListener('click',()=>{hourlyOpen=false;detail()});
@@ -133,7 +147,7 @@ function renderHourly(){
 $('parking-date')?.addEventListener('change',e=>{parkingDay=e.target.value;renderParking()});
 $('parking-time')?.addEventListener('change',e=>{parkingTime=e.target.value;renderParking()});
 function renderParking(){
- const panel=$('parking-panel');if(!panel)return;panel.classList.toggle('hidden',key!=='brighton');if(key!=='brighton')return;
+ const panel=$('parking-panel');if(!panel)return;panel.classList.toggle('hidden',key!=='brighton'||!parkingActive);if(key!=='brighton')return;
  const day=parkingDay??data?.daily?.time[selected]??today(),state=parkingStatus(day,parkingTime);
  $('parking-date').value=day;$('parking-time').value=parkingTime;
  $('parking-eyebrow').textContent=t('出行计划 / PARKING','PLAN YOUR ARRIVAL');$('parking-title').textContent=t('Brighton 停车','Brighton parking');

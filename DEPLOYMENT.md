@@ -71,3 +71,11 @@ The old Sites demo remains on its original deployment. The new cached implementa
 - Two parking tests passed: enforcement boundaries, Christmas exception, holidays, conflicting official dates, invalid input and dates outside the verified calendar.
 - Production browser verified Fri Dec 4 at 09:00 requires reservations, 12:00 does not, Jan 19 is unconfirmed, card hides on Alta, and English/Chinese render at 390px without document overflow.
 - Runtime version: 893452d3-8929-4c95-a7c5-59a653a40995.
+
+## Dedicated Brighton Parking tab
+
+- Moved the parking card out of weather content into a dedicated bilingual Parking tab for Brighton. Weather and parking are mutually exclusive views; weather refresh is hidden in Parking.
+- Other resorts hide the Brighton-specific tab; switching resorts from Parking automatically restores weather.
+- Browser verified weather default, Parking active state, independent visibility, return to weather, and resort-switch fallback. At 390px, document width is 390px with no horizontal page overflow.
+- Availability follow-up found `/calendar-availability` and `/calendar-rates` in the public Inflow client. The actual official Get started flow requires an Inflow account before calendar access. Anonymous third-party API access and pricing remain unconfirmed; no live inventory API is integrated.
+- Runtime version: 084e1c0d-30b6-4024-8b68-6ae72dec7d18.
