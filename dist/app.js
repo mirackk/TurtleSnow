@@ -27,9 +27,10 @@ function staticText(){
  document.querySelector('.cards').setAttribute('aria-label',t('累计降雪','Snowfall totals'));
  $('chart').setAttribute('aria-label',t('15 天每日新增降雪图','15-day daily snowfall chart'));
  $('point-label').textContent=t('指定预报点','Forecast point');$('horizon').textContent=t('未来 15 天','Next 15 days');
- $('source-label').textContent=t('数据：','Data: ');
+ $('source-label').textContent=t('天气数据提供方：','Weather data provided by ');
  $('cache-note').textContent=t('服务端每小时更新 · 共享缓存','Updated hourly · Shared cache');
  $('forecast-note').textContent=t('模型预计新增降雪，非雪场实测；指定海拔不代表整座雪场。','Modeled snowfall, not resort measurements. The forecast elevation does not represent the entire resort.');
+ $('safety-note').textContent=t('预报为估算，可能存在误差。TurtleSnow 与任何雪场均无隶属关系。滑雪前请务必查看雪场官方雪况、雪崩预报及安全公告。','Forecasts are estimates and may be inaccurate. TurtleSnow is not affiliated with any ski resort. Always check official resort conditions, avalanche forecasts, and safety advisories before skiing.');
  $('units-note').textContent=t('指定预报点海拔 · 温度 °C · 风速 km/h','Forecast-point elevation · Temperature °C · Wind km/h');
  $('section-title').textContent=table?t('每日天气详情','Daily weather details'):t('15 天新增降雪','15-day snowfall');
 }
