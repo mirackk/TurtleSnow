@@ -2,7 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { refresh, resorts } from '../src/worker.js';
 function store() { const m = new Map(); return { m, async put(k,v) { m.set(k,v); }, async get(k) { return m.has(k) ? JSON.parse(m.get(k)) : null; } }; }
-function fixture(timezone = 'America/Denver') { return { timezone, daily: { time: Array.from({length:22},(_,i)=>`2026-10-${String(i+8).padStart(2,'0')}`), ...Object.fromEntries(['snowfall_sum','temperature_2m_max','temperature_2m_min','wind_speed_10m_max'].map(k=>[k,Array(22).fill(2)])) } }; }
+function fixture(timezone = 'America/Denver') {
+ const offset=timezone==='America/New_York'?4:timezone==='America/Los_Angeles'?7:6;
+ const start=Date.parse('2026-10-08T00:00:00Z')/1000+offset*3600;
+ return { timezone, daily: {time:Array.from({length:23},(_,i)=>start+i*86400),...Object.fromEntries(['snowfall_sum','temperature_2m_max','temperature_2m_min','wind_speed_10m_max'].map(k=>[k,Array(23).fill(2)]))},hourly:{time:Array.from({length:23*24},(_,i)=>start+i*3600),...Object.fromEntries(['snowfall','temperature_2m','wind_speed_10m','wind_gusts_10m','precipitation_probability'].map(k=>[k,Array(23*24).fill(k==='snowfall'?0.1:2)]))}};
+}
 test('hourly run fetches all nine local timezones; visitors only read KV', async () => {
   const kv=store(), calls=[]; const env={FORECASTS:kv};
   const result=await refresh(env,async url=>{calls.push(url);return Response.json(fixture(url.searchParams.get('timezone')));},()=>new Date('2026-10-15T17:00:00Z'));
@@ -41,4 +45,24 @@ test('a timezone mismatch cannot replace a cached forecast', async () => {
 test('history is seven completed local days, forecast remains fifteen days', async () => {
  const kv=store();await refresh({FORECASTS:kv},async u=>{assert.equal(u.searchParams.get('past_days'),'7');return Response.json(fixture(u.searchParams.get('timezone')))},()=>new Date('2026-10-15T17:00:00Z'));
  const value=await kv.get('forecast:brighton');assert.equal(value.daily.time.length,15);assert.equal(value.daily.time[0],'2026-10-15');assert.equal(value.history.daily.time.length,7);assert.equal(value.history.daily.time[0],'2026-10-08');assert.equal(value.history.daily.time[6],'2026-10-14');assert.equal(value.history.snowfallTotal,14);assert.equal(value.history.source,'archived_forecast');
+});
+
+test('hourly cache covers all fifteen full forecast days, including final midnight',async()=>{
+ const kv=store();await refresh({FORECASTS:kv},async u=>{assert.equal(u.searchParams.get('timeformat'),'unixtime');assert.equal(u.searchParams.get('forecast_days'),'16');return Response.json(fixture(u.searchParams.get('timezone')))},()=>new Date('2026-10-15T17:00:00Z'));
+ const {dayHours}=await import('../dist/hourly.js');
+ const d=await kv.get('forecast:brighton');assert.equal(d.hourly.time.length,360);
+ for(const day of d.daily.time)assert.equal(dayHours(d.hourly,day,'America/Denver').length,24);
+ const last=dayHours(d.hourly,'2026-10-29','America/Denver');assert.equal(last.at(-1).endTime,'24:00');
+});
+test('malformed hourly data preserves the entire previous snapshot',async()=>{
+ const kv=store();await refresh({FORECASTS:kv},async u=>Response.json(fixture(u.searchParams.get('timezone'))));const before=kv.m.get('forecast:alta');
+ await refresh({FORECASTS:kv},async u=>{const d=fixture(u.searchParams.get('timezone'));d.hourly.snowfall.pop();return Response.json(d)});
+ assert.equal(kv.m.get('forecast:alta'),before);
+});
+test('local interval grouping handles DST and missing snow is not zero',async()=>{
+ const {dayHours,summarize}=await import('../dist/hourly.js');
+ for(const [day,start,count] of [['2026-11-01','2026-11-01T04:00:00Z',25],['2026-03-08','2026-03-08T05:00:00Z',23]]){
+  const hourly={time:Array.from({length:count},(_,i)=>Date.parse(start)/1000+(i+1)*3600),snowfall:Array(count).fill(1)};
+  const hours=dayHours(hourly,day,'America/New_York');assert.equal(hours.length,count);assert.equal(summarize(hours).snowfall,count);hours[0].snowfall=null;assert.equal(summarize(hours).snowfall,null);
+ }
 });

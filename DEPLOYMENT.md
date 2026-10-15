@@ -54,3 +54,12 @@ The old Sites demo remains on its original deployment. The new cached implementa
 - Five tests passed, including completed-day boundaries and historical totals, timezone handling, malformed data and failure retention.
 - All nine production HTTPS APIs returned seven historical days (Oct 8–14), fifteen forecast days and consistent historical sums.
 - Production mobile browser verified Brighton historical total 21.8 cm / 8.6 in, English translation, date labels and seven daily bars. Added safe rendering for older HTML during asset propagation.
+
+## Hourly forecast detail release
+
+- Added selectable dates from both the 15-day chart and daily table, with a matching dark inline detail panel, previous/next day and close controls.
+- Added four six-hour period cards, 24-hour snowfall chart and expandable weather table including temperature, wind, gusts and precipitation chance. All use bilingual text, shared unit controls and resort-local time.
+- Stored real hourly data in existing shared KV; all nine production resort endpoints verified with 360 hourly intervals, 15 complete forecast days and 7 historical days.
+- Eight integration tests passed, including full final-day midnight coverage, 23/25-hour DST days, null handling, malformed-hourly snapshot retention and cache-only visitor behavior.
+- Production browser verified chart/table date selection, last-day bounds, next-day arrows, close behavior, English/Chinese, cm/inch, four period cards, 24 hourly rows and no document overflow at 390px. Screenshot: `turtleSnow-hourly.png` in the parent workspace.
+- The extra upstream day is trimmed from daily forecasts and used only to complete the last hourly interval. Missing values and uncertain long-range timing are disclosed.

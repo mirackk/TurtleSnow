@@ -55,3 +55,11 @@ The hourly forecast request includes `past_days=7`. Open-Meteo supplies recently
 ## Domain migration
 
 The account subdomain was changed to `snowcast` in Cloudflare Dashboard. Primary URL is https://turtlesnow.snowcast.workers.dev. The retired `*.wasatch-snow.workers.dev` namespace no longer routes; Cloudflare cannot retain those old URLs as redirects. The legacy Worker at `wasatch-snow.snowcast.workers.dev` redirects to the primary origin.
+
+## Hourly day details
+
+Click a forecast bar or a date in the daily weather table to reveal hourly details. Four local periods cover the full day: Overnight 00–06, Morning 06–12, Afternoon 12–18, Evening 18–24. Each shows snowfall, temperature range and maximum wind. The horizontally scrollable hourly snowfall chart is followed by an expandable table with temperature, wind, gusts and precipitation probability. Previous/next arrows and close controls support keyboard and touch use. English/Chinese and cm/inch preferences apply throughout; long-range timing is marked uncertain.
+
+Open-Meteo hourly snowfall represents the preceding hour. Stored hourly timestamps are Unix seconds; the UI assigns each sample to the interval `[timestamp − 1 hour, timestamp]` and groups it by the start date in the resort timezone. Temperature and wind represent the interval end. DST days may contain 23 or 25 intervals. Missing values display as unavailable, not zero, and incomplete period snowfall does not produce a numeric total.
+
+The server requests 16 forecast days plus 7 past days in the same hourly refresh. Only 15 daily forecast days and their complete hourly intervals are exposed; the extra day supplies the final midnight endpoint. Daily dates are normalized back to ISO calendar strings; hourly timestamps remain Unix seconds. The whole snapshot is retained if hourly arrays or coverage are malformed. Individual null hourly values remain explicitly unavailable. This keeps nine scheduled upstream requests per hour, though provider usage weighting can increase with the extra variables/time range.

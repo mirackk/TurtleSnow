@@ -1,3 +1,4 @@
+import { hourlyFields, localDate } from '../dist/hourly.js';
 import { resorts } from '../dist/resorts.js';
 export { resorts };
 const fields = ['snowfall_sum', 'temperature_2m_max', 'temperature_2m_min', 'wind_speed_10m_max'];
@@ -12,13 +13,23 @@ export function validate(data, timezone = 'America/Denver', days = 15) {
   return data;
 }
 export function splitForecast(raw, timezone, now) {
+  if (!raw?.daily?.time) throw new Error('Missing daily data');
+  const firstHour=raw.daily.time[7], lastHour=raw.daily.time[22];
+  if(!Number.isFinite(firstHour)||!Number.isFinite(lastHour))throw new Error('Missing hourly boundaries');
+  raw = {...raw, daily: Object.fromEntries(Object.entries(raw.daily).map(([k,v])=>[k,k==='time'?v.slice(0,22).map(n=>typeof n==='number'?localDate(n,timezone):n):v.slice(0,22)]))};
   validate(raw, timezone, 22);
+  const h=raw.hourly;
+  if(!h?.time?.length || !h.time.every((n,i)=>Number.isFinite(n)&&(!i||n-h.time[i-1]===3600)) || hourlyFields.some(k=>h[k]?.length!==h.time.length || !h[k].every(v=>v===null||Number.isFinite(v)))) throw new Error('Incomplete hourly data');
+  if(h.snowfall.some(v=>v!==null&&v<0)||h.wind_speed_10m.some(v=>v!==null&&v<0))throw new Error('Invalid hourly values');
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year:'numeric', month:'2-digit', day:'2-digit' }).format(now);
   const anchor = Date.parse(today + 'T00:00:00Z');
   if (!raw.daily.time.every((date,i) => date === new Date(anchor + (i-7)*86400000).toISOString().slice(0,10))) throw new Error('Unexpected forecast dates');
   const slice = (start,end) => Object.fromEntries(Object.entries(raw.daily).map(([key,values]) => [key,values.slice(start,end)]));
   const past = slice(0,7);
-  return { ...raw, daily: slice(7,22), history: { daily: past, snowfallTotal: past.snowfall_sum.reduce((a,b)=>a+b,0), source: 'archived_forecast', completeDays: 7 } };
+  const indices=h.time.flatMap((end,i)=>end>firstHour&&end<=lastHour?[i]:[]);
+  const hourly=Object.fromEntries(['time',...hourlyFields].map(k=>[k,indices.map(i=>h[k][i])]));
+  if(hourly.time.length!==(lastHour-firstHour)/3600||hourly.time[0]!==firstHour+3600||hourly.time.at(-1)!==lastHour)throw new Error('Missing hourly forecast coverage');
+  return { ...raw, daily_units: {...raw.daily_units, time: 'iso8601'}, hourly, daily: slice(7,22), history: { daily: past, snowfallTotal: past.snowfall_sum.reduce((a,b)=>a+b,0), source: 'archived_forecast', completeDays: 7 } };
 }
 export async function refresh(env, fetcher = fetch, now = () => new Date()) {
   const entries = Object.entries(resorts), results = [];
@@ -28,7 +39,7 @@ export async function refresh(env, fetcher = fetch, now = () => new Date()) {
     const attemptedAt = now().toISOString();
     try {
       const url = new URL('https://api.open-meteo.com/v1/forecast');
-      url.search = new URLSearchParams({ latitude: location.latitude, longitude: location.longitude, elevation: location.elevation, daily: fields.join(','), timezone: location.timezone, forecast_days: 15, past_days: 7, temperature_unit: 'celsius', wind_speed_unit: 'kmh' });
+      url.search = new URLSearchParams({ latitude: location.latitude, longitude: location.longitude, elevation: location.elevation, daily: fields.join(','), timezone: location.timezone, forecast_days: 16, past_days: 7, hourly: hourlyFields.join(','), timeformat: 'unixtime', temperature_unit: 'celsius', wind_speed_unit: 'kmh' });
       const response = await fetcher(url, { signal: AbortSignal.timeout(20000) });
       if (!response.ok) throw new Error(`Upstream HTTP ${response.status}`);
       const forecast = splitForecast(await response.json(), location.timezone, now());
