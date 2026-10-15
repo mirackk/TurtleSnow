@@ -4,15 +4,15 @@ Website: https://turtlesnow.wasatch-snow.workers.dev
 
 Source: https://github.com/mirackk/TurtleSnow
 
-Public, login-free Brighton / Alta 15-day snow forecasts. Existing dark responsive UI preserved from Sites commit `21871e1efdfc8c2d50ee6d1f5e14c80ac8f24583`.
+Public, login-free 15-day snow forecasts for nine US resorts, with Chinese and English UI. Existing dark responsive UI preserved from Sites commit `21871e1efdfc8c2d50ee6d1f5e14c80ac8f24583`.
 
 ## Data flow
 
-Cloudflare Cron (`0 * * * *`, UTC hourly) → two Open-Meteo requests → shared KV → `/api/forecast?resort=brighton|alta` → browser.
+Cloudflare Cron (`0 * * * *`, UTC hourly) → nine Open-Meteo requests (at most three concurrent) → shared KV → `/api/forecast?resort=brighton|alta` → browser.
 
-Visitors and the refresh button only read KV. No upstream calls occur in HTTP request handlers. Each resort retains its last valid snapshot indefinitely if refresh fails. `updatedAt` is the last successful fetch time, `lastAttemptAt` the latest attempt. The UI formats timestamps in America/Denver including the actual MST/MDT zone and warns when a refresh failed or data is older than 90 minutes. KV is eventually consistent; updates may take roughly a minute to appear globally.
+Visitors and the refresh button only read KV. No upstream calls occur in HTTP request handlers. Each resort retains its last valid snapshot indefinitely if refresh fails. `updatedAt` is the last successful fetch time, `lastAttemptAt` the latest attempt. The UI formats timestamps in the selected resort’s local timezone including daylight saving time and warns when a refresh failed or data is older than 90 minutes. KV is eventually consistent; updates may take roughly a minute to appear globally.
 
-Fixed forecast elevations: Brighton 2879m, Alta 2900m. Snow is stored in cm, temperature in Celsius, wind in km/h. Unit switching is browser-local. Initial cache is populated separately; an empty cache returns 503 rather than fetching upstream.
+Forecast points are defined once in `dist/resorts.js`, shared by browser and Worker. Brighton 2879m and Alta 2900m are preserved. Other resorts use explicit representative on-mountain points; these are not official snow stakes or summit measurements. California resorts use America/Los_Angeles, Killington uses America/New_York, and the remaining resorts use America/Denver. Snow is stored in cm, temperature in Celsius, wind in km/h. Unit and Chinese/English language switching are browser-local and remembered without login. Initial cache is populated separately; an empty cache returns 503 rather than fetching upstream.
 
 ## Development and deployment
 
@@ -32,10 +32,18 @@ GitHub stores source; deployment currently uses authenticated Wrangler locally. 
 
 ## Usage and attribution
 
-Data: [Open-Meteo](https://open-meteo.com/) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Free hosted API use is non-commercial only and subject to its rate limits and terms. Two hourly requests mean 48 normal requests/day; model/variable weighting can affect provider call accounting. Caching does not change licensing requirements.
+Data: [Open-Meteo](https://open-meteo.com/) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Free hosted API use is non-commercial only and subject to its rate limits and terms. Nine hourly requests mean 216 normal requests/day; model/variable weighting can affect provider call accounting. Caching does not change licensing requirements.
 
-Cloudflare Free quotas currently include 100,000 KV key reads/day and 1,000 key writes/day. Normal updates write 96 keys/day (forecast + status for each resort hourly). Each forecast API request reads two keys. Static assets are served through Workers Assets. No paid upgrade was requested. Traffic and any other account workloads share applicable quotas.
+Cloudflare Free quotas currently include 100,000 KV key reads/day and 1,000 key writes/day. Normal updates write 432 keys/day (forecast + status for each of nine resorts hourly). Each forecast API request reads two keys. Static assets are served through Workers Assets. No paid upgrade was requested. Traffic and any other account workloads share applicable quotas.
 
 ## Verification
 
 `npm test` covers visitor cache-only behavior, both fixed elevations, independent resort updates, failed/malformed upstream data preserving prior snapshots, real success timestamps, and empty/invalid requests. Production anonymous access and browser checks are recorded in `DEPLOYMENT.md`.
+
+## Resort catalog and localization
+
+A–Z: Alta, Breckenridge, Brighton, Copper Mountain, Killington, Mammoth Mountain, Palisades Tahoe, Park City Mountain, Vail. Winter Park is excluded. New visitors default to Brighton; returning visitors retain their selection. `dist/app.js` handles rendering, dynamic bilingual messages, dates and language persistence; static translations live in `dist/translations.js`.
+
+## Forecast point references
+
+The numeric elevations in the app are selected model forecast heights, not official mountain statistics. Resort geography and context were checked against official resort information: [Breckenridge](https://www.breckenridge.com/the-mountain/about-the-mountain/mountain-info.aspx), [Copper](https://www.coppercolorado.com/the-mountain/mountain-safety-stats/winter-mountain-stats/), [Mammoth](https://www.mammothmountain.com/on-the-mountain/mountain-report), [Palisades](https://www.palisadestahoe.com/footer/mountain-statistics), [Park City](https://www.parkcitymountain.com/the-mountain/mountain-conditions/weather-report.aspx), [Vail](https://www.vail.com/the-mountain/about-the-mountain/mountain-info.aspx), and [Killington](https://www.killington.com/the-mountain/conditions-weather/current-conditions-weather).

@@ -32,3 +32,15 @@ The old Sites demo remains on its original deployment. The new cached implementa
 - Production HTTPS homepage and both resort APIs return 200. Old API URL returns 308 to the matching new URL.
 - Mobile viewport checks at 320px and 390px confirmed document width equals viewport width (no page overflow). The 15-day chart scrolls horizontally inside its panel. Resort switching, cm/inch conversion, 15-row daily weather table, and far-date chart selection with temperature/wind details were verified in the production browser.
 - Mobile controls have larger touch areas, cards have compact spacing, section headings wrap, daily table cells stay legible, and a horizontal chart scrolling hint is visible.
+
+## Nine-resort and bilingual expansion
+
+- Deployed nine resorts (Winter Park excluded) using a single catalog shared by browser and Worker.
+- Added right-side Language selector (中文 / English), translated chart/table/status/outlook/error/footer text, and persisted language choice. Resort and snow-unit preferences survive a language change and reload.
+- Preserved Brighton/Alta elevations. Each resort forecast requests and validates its own timezone, and the UI uses that timezone for today labels and successful-update timestamps.
+- All nine anonymous production API requests verified: HTTP 200, 15 days, valid success timestamp, expected timezone, and fresh cache.
+- Initial nine-resort remote seed succeeded. A local burst then hit upstream 429 errors for two resorts; changed scheduled updates to batches of at most three. Full local nine-resort scheduled invocation subsequently succeeded.
+- Four integration tests passed, including cache-only visitor behavior, nine-resort timezone handling, independent failure retention, malformed data rejection, and timezone mismatch retention.
+- Browser QA: Chinese and English; A–Z list of nine resorts; English legend and 15-row daily table; language/resort persistence after reload; EDT and PDT timestamps; long Mammoth Mountain title and language selector at 320px with document width exactly 320px; 390px English mobile screenshot.
+- Latest runtime version: cd4d8843-b155-4b58-ab65-f74df3d918ad.
+- Hourly schedule remains `0 * * * *`; routine usage is 216 upstream requests and 432 KV writes/day. No paid upgrade performed.

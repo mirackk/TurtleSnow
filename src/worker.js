@@ -1,11 +1,9 @@
-export const resorts = {
-  brighton: { latitude: 40.598, longitude: -111.583, elevation: 2879 },
-  alta: { latitude: 40.588, longitude: -111.638, elevation: 2900 }
-};
+import { resorts } from '../dist/resorts.js';
+export { resorts };
 const fields = ['snowfall_sum', 'temperature_2m_max', 'temperature_2m_min', 'wind_speed_10m_max'];
-export function validate(data) {
+export function validate(data, timezone = 'America/Denver') {
   const d = data?.daily;
-  if (data?.timezone !== 'America/Denver' || d?.time?.length !== 15 ||
+  if (data?.timezone !== timezone || d?.time?.length !== 15 ||
       !d.time.every(t => /^\d{4}-\d{2}-\d{2}$/.test(t)) ||
       fields.some(k => d[k]?.length !== 15 || !d[k].every(Number.isFinite)) ||
       d.snowfall_sum.some(n => n < 0) || d.wind_speed_10m_max.some(n => n < 0)) {
@@ -14,14 +12,17 @@ export function validate(data) {
   return data;
 }
 export async function refresh(env, fetcher = fetch, now = () => new Date()) {
-  return Promise.allSettled(Object.entries(resorts).map(async ([key, location]) => {
+  const entries = Object.entries(resorts), results = [];
+  // Bound concurrent upstream requests as the catalog grows.
+  for (let i = 0; i < entries.length; i += 3) {
+    results.push(...await Promise.allSettled(entries.slice(i, i + 3).map(async ([key, location]) => {
     const attemptedAt = now().toISOString();
     try {
       const url = new URL('https://api.open-meteo.com/v1/forecast');
-      url.search = new URLSearchParams({ ...location, daily: fields.join(','), timezone: 'America/Denver', forecast_days: 15, temperature_unit: 'celsius', wind_speed_unit: 'kmh' });
+      url.search = new URLSearchParams({ latitude: location.latitude, longitude: location.longitude, elevation: location.elevation, daily: fields.join(','), timezone: location.timezone, forecast_days: 15, temperature_unit: 'celsius', wind_speed_unit: 'kmh' });
       const response = await fetcher(url, { signal: AbortSignal.timeout(20000) });
       if (!response.ok) throw new Error(`Upstream HTTP ${response.status}`);
-      const forecast = validate(await response.json());
+      const forecast = validate(await response.json(), location.timezone);
       // No TTL: the last valid forecast survives upstream outages.
       await env.FORECASTS.put(`forecast:${key}`, JSON.stringify({ ...forecast, updatedAt: now().toISOString() }));
       await env.FORECASTS.put(`status:${key}`, JSON.stringify({ attemptedAt, ok: true }));
@@ -30,7 +31,9 @@ export async function refresh(env, fetcher = fetch, now = () => new Date()) {
       console.error(`Forecast refresh failed: ${key}`, error.message);
       throw error;
     }
-  }));
+    })));
+  }
+  return results;
 }
 export default {
   async fetch(request, env) {
