@@ -1,6 +1,6 @@
 # turtleSnow · 滑雪天气预报
 
-Website: https://turtlesnow.wasatch-snow.workers.dev
+Website: https://turtlesnow.snowcast.workers.dev
 
 Source: https://github.com/mirackk/TurtleSnow
 
@@ -47,3 +47,11 @@ A–Z: Alta, Breckenridge, Brighton, Copper Mountain, Killington, Mammoth Mounta
 ## Forecast point references
 
 The numeric elevations in the app are selected model forecast heights, not official mountain statistics. Resort geography and context were checked against official resort information: [Breckenridge](https://www.breckenridge.com/the-mountain/about-the-mountain/mountain-info.aspx), [Copper](https://www.coppercolorado.com/the-mountain/mountain-safety-stats/winter-mountain-stats/), [Mammoth](https://www.mammothmountain.com/on-the-mountain/mountain-report), [Palisades](https://www.palisadestahoe.com/footer/mountain-statistics), [Park City](https://www.parkcitymountain.com/the-mountain/mountain-conditions/weather-report.aspx), [Vail](https://www.vail.com/the-mountain/about-the-mountain/mountain-info.aspx), and [Killington](https://www.killington.com/the-mountain/conditions-weather/current-conditions-weather).
+
+## Past seven days
+
+The hourly forecast request includes `past_days=7`. Open-Meteo supplies recently archived forecasts, not resort observations. The Worker validates all 22 contiguous local calendar dates, splits the seven completed days before today into `history.daily`, and preserves the existing fifteen-day `daily` forecast contract. The history panel recomputes its seven-day snowfall sum and supports both languages and snow units. Missing history displays unavailable rather than zero. History and forecasts are persisted together only after full validation, and retained together on an upstream failure. Normal upstream request and KV write counts remain unchanged.
+
+## Domain migration
+
+The account subdomain was changed to `snowcast` in Cloudflare Dashboard. Primary URL is https://turtlesnow.snowcast.workers.dev. The retired `*.wasatch-snow.workers.dev` namespace no longer routes; Cloudflare cannot retain those old URLs as redirects. The legacy Worker at `wasatch-snow.snowcast.workers.dev` redirects to the primary origin.

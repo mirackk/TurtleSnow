@@ -2,7 +2,7 @@
 
 - GitHub: https://github.com/mirackk/TurtleSnow (owner verified as mirackk; source pushed to main).
 - Cloudflare Worker: turtlesnow, account 43b5ffa383e06b416f11a0e935fe7b79.
-- Public hostname: https://turtlesnow.wasatch-snow.workers.dev
+- Public hostname: https://turtlesnow.snowcast.workers.dev
 - KV namespace: e992f19c58074ecf879be71bf17062a7; FORECASTS binding.
 - Cron: `0 * * * *` (UTC hourly; every hour in Denver too).
 - Initial real cache for both resorts: 2026-10-15T17:27:50.910Z.
@@ -44,3 +44,13 @@ The old Sites demo remains on its original deployment. The new cached implementa
 - Browser QA: Chinese and English; A–Z list of nine resorts; English legend and 15-row daily table; language/resort persistence after reload; EDT and PDT timestamps; long Mammoth Mountain title and language selector at 320px with document width exactly 320px; 390px English mobile screenshot.
 - Latest runtime version: cd4d8843-b155-4b58-ab65-f74df3d918ad.
 - Hourly schedule remains `0 * * * *`; routine usage is 216 upstream requests and 432 KV writes/day. No paid upgrade performed.
+
+## Past-seven-days feature and snowcast domain
+
+- Cloudflare API confirms account subdomain `snowcast`; primary HTTPS origin is now `https://turtlesnow.snowcast.workers.dev`.
+- Updated the legacy Worker redirect target and source documentation. Previous account-subdomain URLs stop routing after the Cloudflare rename.
+- Added a separate seven-day historical total, daily green bars, local date range and bilingual model-estimate disclosure. Excludes today; snowfall is not resort-measured snow depth.
+- Upstream `past_days=7` uses the existing nine hourly requests. Validates 22 contiguous local dates before storing seven historical days plus fifteen forecast days in one cache snapshot.
+- Five tests passed, including completed-day boundaries and historical totals, timezone handling, malformed data and failure retention.
+- All nine production HTTPS APIs returned seven historical days (Oct 8–14), fifteen forecast days and consistent historical sums.
+- Production mobile browser verified Brighton historical total 21.8 cm / 8.6 in, English translation, date labels and seven daily bars. Added safe rendering for older HTML during asset propagation.

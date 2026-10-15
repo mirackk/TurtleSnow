@@ -1,15 +1,24 @@
 import { resorts } from '../dist/resorts.js';
 export { resorts };
 const fields = ['snowfall_sum', 'temperature_2m_max', 'temperature_2m_min', 'wind_speed_10m_max'];
-export function validate(data, timezone = 'America/Denver') {
+export function validate(data, timezone = 'America/Denver', days = 15) {
   const d = data?.daily;
-  if (data?.timezone !== timezone || d?.time?.length !== 15 ||
+  if (data?.timezone !== timezone || d?.time?.length !== days ||
       !d.time.every(t => /^\d{4}-\d{2}-\d{2}$/.test(t)) ||
-      fields.some(k => d[k]?.length !== 15 || !d[k].every(Number.isFinite)) ||
+      fields.some(k => d[k]?.length !== days || !d[k].every(Number.isFinite)) ||
       d.snowfall_sum.some(n => n < 0) || d.wind_speed_10m_max.some(n => n < 0)) {
     throw new Error('Incomplete forecast');
   }
   return data;
+}
+export function splitForecast(raw, timezone, now) {
+  validate(raw, timezone, 22);
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year:'numeric', month:'2-digit', day:'2-digit' }).format(now);
+  const anchor = Date.parse(today + 'T00:00:00Z');
+  if (!raw.daily.time.every((date,i) => date === new Date(anchor + (i-7)*86400000).toISOString().slice(0,10))) throw new Error('Unexpected forecast dates');
+  const slice = (start,end) => Object.fromEntries(Object.entries(raw.daily).map(([key,values]) => [key,values.slice(start,end)]));
+  const past = slice(0,7);
+  return { ...raw, daily: slice(7,22), history: { daily: past, snowfallTotal: past.snowfall_sum.reduce((a,b)=>a+b,0), source: 'archived_forecast', completeDays: 7 } };
 }
 export async function refresh(env, fetcher = fetch, now = () => new Date()) {
   const entries = Object.entries(resorts), results = [];
@@ -19,10 +28,10 @@ export async function refresh(env, fetcher = fetch, now = () => new Date()) {
     const attemptedAt = now().toISOString();
     try {
       const url = new URL('https://api.open-meteo.com/v1/forecast');
-      url.search = new URLSearchParams({ latitude: location.latitude, longitude: location.longitude, elevation: location.elevation, daily: fields.join(','), timezone: location.timezone, forecast_days: 15, temperature_unit: 'celsius', wind_speed_unit: 'kmh' });
+      url.search = new URLSearchParams({ latitude: location.latitude, longitude: location.longitude, elevation: location.elevation, daily: fields.join(','), timezone: location.timezone, forecast_days: 15, past_days: 7, temperature_unit: 'celsius', wind_speed_unit: 'kmh' });
       const response = await fetcher(url, { signal: AbortSignal.timeout(20000) });
       if (!response.ok) throw new Error(`Upstream HTTP ${response.status}`);
-      const forecast = validate(await response.json(), location.timezone);
+      const forecast = splitForecast(await response.json(), location.timezone, now());
       // No TTL: the last valid forecast survives upstream outages.
       await env.FORECASTS.put(`forecast:${key}`, JSON.stringify({ ...forecast, updatedAt: now().toISOString() }));
       await env.FORECASTS.put(`status:${key}`, JSON.stringify({ attemptedAt, ok: true }));

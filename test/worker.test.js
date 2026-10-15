@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { refresh, resorts } from '../src/worker.js';
 function store() { const m = new Map(); return { m, async put(k,v) { m.set(k,v); }, async get(k) { return m.has(k) ? JSON.parse(m.get(k)) : null; } }; }
-function fixture(timezone = 'America/Denver') { return { timezone, daily: { time: Array.from({length:15},(_,i)=>`2026-10-${String(i+15).padStart(2,'0')}`), ...Object.fromEntries(['snowfall_sum','temperature_2m_max','temperature_2m_min','wind_speed_10m_max'].map(k=>[k,Array(15).fill(2)])) } }; }
+function fixture(timezone = 'America/Denver') { return { timezone, daily: { time: Array.from({length:22},(_,i)=>`2026-10-${String(i+8).padStart(2,'0')}`), ...Object.fromEntries(['snowfall_sum','temperature_2m_max','temperature_2m_min','wind_speed_10m_max'].map(k=>[k,Array(22).fill(2)])) } }; }
 test('hourly run fetches all nine local timezones; visitors only read KV', async () => {
   const kv=store(), calls=[]; const env={FORECASTS:kv};
   const result=await refresh(env,async url=>{calls.push(url);return Response.json(fixture(url.searchParams.get('timezone')));},()=>new Date('2026-10-15T17:00:00Z'));
@@ -36,4 +36,9 @@ test('a timezone mismatch cannot replace a cached forecast', async () => {
  await refresh(env,async()=>Response.json(fixture('America/Denver')));
  assert.equal(kv.m.get('forecast:killington'),before);
  assert.equal((await kv.get('status:killington')).ok,false);
+});
+
+test('history is seven completed local days, forecast remains fifteen days', async () => {
+ const kv=store();await refresh({FORECASTS:kv},async u=>{assert.equal(u.searchParams.get('past_days'),'7');return Response.json(fixture(u.searchParams.get('timezone')))},()=>new Date('2026-10-15T17:00:00Z'));
+ const value=await kv.get('forecast:brighton');assert.equal(value.daily.time.length,15);assert.equal(value.daily.time[0],'2026-10-15');assert.equal(value.history.daily.time.length,7);assert.equal(value.history.daily.time[0],'2026-10-08');assert.equal(value.history.daily.time[6],'2026-10-14');assert.equal(value.history.snowfallTotal,14);assert.equal(value.history.source,'archived_forecast');
 });

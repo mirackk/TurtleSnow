@@ -47,8 +47,23 @@ function detail(){
  $('detail').innerHTML=`<strong>${date(d.time[i])} ${weekday(d.time[i])}</strong><span>${t('新增降雪','Snowfall')}<b>${snow(d.snowfall_sum[i])}</b></span><span>${t('气温','Temperature')}<b>${Math.round(d.temperature_2m_min[i])}° / ${Math.round(d.temperature_2m_max[i])}°C</b></span><span>${t('最大风速','Max wind')}<b>${Math.round(d.wind_speed_10m_max[i])} km/h</b></span>${i>6?`<span style="color:var(--purple)">${t('远期趋势','Long-range trend')}</span>`:''}`;
  document.querySelectorAll('.day').forEach((el,j)=>{el.classList.toggle('selected',j===i);el.setAttribute('aria-pressed',String(j===i))});
 }
+function renderHistory(){
+ if(!$('history-title'))return; // Tolerate an older HTML document during asset propagation.
+ $('history-title').textContent=t('过去 7 天降雪','Past 7 days snowfall');
+ $('history-badge').textContent=t('截至昨日 · 雪场当地时间','Through yesterday · Resort local time');
+ $('history-label').textContent=t('7 天累计新增降雪','7-day snowfall total');
+ $('history-note').textContent=t('历史天气模型估算（归档预报），不是雪场实测或现有积雪厚度；仅统计所示日期的 7 个完整自然日，不含今天。','Historical model estimates (archived forecasts), not resort measurements or current snow depth. Covers the seven complete local calendar days shown, excluding today.');
+ const h=data?.history?.daily;
+ if(!h||h.time?.length!==7||h.snowfall_sum?.length!==7||!h.snowfall_sum.every(Number.isFinite)){
+  $('history-total').textContent='—';$('history-range').textContent=t('历史数据暂不可用','Historical data unavailable');$('history-days').replaceChildren();return;
+ }
+ const total=h.snowfall_sum.reduce((a,b)=>a+b,0),max=Math.max(...h.snowfall_sum,1);
+ $('history-total').innerHTML=num(total)+`<span>${unit==='inch'?'in':'cm'}</span>`;
+ $('history-range').textContent=date(h.time[0])+' – '+date(h.time[6]);
+ $('history-days').innerHTML=h.time.map((day,i)=>`<div class="history-day" aria-label="${day}, ${t('历史模型降雪','historical modeled snowfall')} ${snow(h.snowfall_sum[i])}"><div class="history-bar-space"><span class="bar-value">${num(h.snowfall_sum[i])}</span><div class="history-bar" style="height:${Math.max(3,h.snowfall_sum[i]/max*64)}px"></div></div><div class="weekday">${weekday(day)}</div><div class="date">${date(day)}</div></div>`).join('');
+}
 function render(){
- staticText();status();['cm','inch'].forEach(u=>{$(u).classList.toggle('active',u===unit);$(u).setAttribute('aria-pressed',String(u===unit))});
+ staticText();status();renderHistory();['cm','inch'].forEach(u=>{$(u).classList.toggle('active',u===unit);$(u).setAttribute('aria-pressed',String(u===unit))});
  if(!data){
  ['sum1','sum2','sum3'].forEach(id=>$(id).textContent='—');['range1','range2','range3'].forEach(id=>$(id).textContent=t('等待预报','Awaiting forecast'));
  $('chart').replaceChildren();$('rows').replaceChildren();$('total').textContent=t('正在加载','Loading');$('detail').textContent=failed?t('数据暂不可用；请刷新重试。','Data unavailable. Please refresh to retry.'):t('正在读取预报…','Loading forecast…');
