@@ -20,7 +20,8 @@
   ],
   "triggers": {
     "crons": [
-      "0 * * * *"
+      "0 * * * *",
+      "30 */12 * * *"
     ]
   },
   "d1_databases": [
@@ -29,5 +30,8 @@
       "database_name": "turtlesnow-feedback",
       "database_id": "4aef3d7e-1e74-43fc-95c0-a6b0d1406d8a"
     }
-  ]
+  ],
+  "ai": {
+    "binding": "AI"
+  }
 }

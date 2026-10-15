@@ -1,3 +1,5 @@
+import { refreshReports } from './reports.js';
+import { refreshSummaries } from './summaries.js';
 import { feedback } from './feedback.js';
 import { hourlyFields, localDate } from '../dist/hourly.js';
 import { resorts } from '../dist/resorts.js';
@@ -67,15 +69,18 @@ export default {
     const key = url.searchParams.get('resort') || 'brighton';
     if (!Object.hasOwn(resorts, key)) return Response.json({ error: 'Unknown resort' }, { status: 400, headers });
     // Visitors only read shared storage. They never trigger upstream calls.
-    const [forecast, status] = await Promise.all([
-      env.FORECASTS.get(`forecast:${key}`, 'json'), env.FORECASTS.get(`status:${key}`, 'json')
+    const [forecast, status, summary, report, reportStatus] = await Promise.all([
+      env.FORECASTS.get(`forecast:${key}`, 'json'), env.FORECASTS.get(`status:${key}`, 'json'),
+      env.FORECASTS.get(`summary:${key}`, 'json'), env.FORECASTS.get(`report:${key}`, 'json'), env.FORECASTS.get(`report-status:${key}`, 'json')
     ]);
     if (!forecast) return Response.json({ error: 'Forecast not initialized' }, { status: 503, headers: { ...headers, 'Retry-After': '300' } });
     const stale = Date.now() - Date.parse(forecast.updatedAt) > 90 * 60 * 1000 || status?.ok === false;
-    return Response.json({ ...forecast, stale, lastAttemptAt: status?.attemptedAt || null, lastRefreshOk: status?.ok ?? null }, { headers });
+    return Response.json({ ...forecast, summary, report: report ? {...report, stale: reportStatus?.ok === false || Date.now()-Date.parse(report.fetchedAt)>2*3600000} : null, stale, lastAttemptAt: status?.attemptedAt || null, lastRefreshOk: status?.ok ?? null }, { headers });
   },
   async scheduled(controller, env, ctx) {
+    if (controller.cron === '30 */12 * * *') { await refreshSummaries(env); return; }
     const results = await refresh(env);
+    await refreshReports(env);
     if (results.some(r => r.status === 'rejected')) throw new Error('One or more forecasts failed to refresh');
   }
 };

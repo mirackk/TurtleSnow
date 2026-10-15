@@ -75,7 +75,7 @@ function render(){
  if(!data){
  ['sum1','sum2','sum3'].forEach(id=>$(id).textContent='—');['range1','range2','range3'].forEach(id=>$(id).textContent=t('等待预报','Awaiting forecast'));
  $('chart').replaceChildren();$('rows').replaceChildren();$('total').textContent=t('正在加载','Loading');$('detail').textContent=failed?t('数据暂不可用；请刷新重试。','Data unavailable. Please refresh to retry.'):t('正在读取预报…','Loading forecast…');
- $('outlook-title').textContent=failed?t('等待天气数据','Awaiting weather data'):t('正在分析降雪窗口','Finding snow windows');$('outlook').textContent='';$('outlook-note').textContent='';$('outlook-stamp').textContent='';return;
+ $('outlook-title').textContent=failed?t('等待天气数据','Awaiting weather data'):t('正在分析降雪窗口','Finding snow windows');$('outlook').textContent='';$('outlook-note').textContent='';$('outlook-stamp').textContent='';$('summary-facts').replaceChildren();$('summary-source').replaceChildren();$('summary-status').textContent='';$('summary-feel').textContent='';$('summary-reasoning').textContent='';return;
  }
  const d=data.daily,falls=d.snowfall_sum,total=falls.reduce((a,b)=>a+b,0),max=Math.max(...falls,1),localToday=today();
  for(let j=0;j<3;j++){const start=j*5,end=start+5;$('sum'+(j+1)).innerHTML=num(falls.slice(start,end).reduce((a,b)=>a+b,0))+`<span>${unit==='inch'?'in':'cm'}</span>`;$('range'+(j+1)).textContent=date(d.time[start])+' – '+date(d.time[end-1])+(j===2?t(' · 远期趋势',' · Trend'):'');}
@@ -85,11 +85,7 @@ function render(){
  $('chart').querySelectorAll('button').forEach(b=>b.onclick=()=>{selectDay(Number(b.dataset.index),true)});scroll.scrollLeft=previousScroll;
  $('rows').innerHTML=d.time.map((day,i)=>`<tr><td><button class="date-link" data-day="${i}" aria-controls="hourly-panel">${date(day)} ${weekday(day)}${i>6?t(' · 趋势',' · Trend'):''} ↗</button></td><td style="color:${i>6?'var(--purple)':'var(--blue)'}">${snow(falls[i])}</td><td>${Math.round(d.temperature_2m_min[i])}° / ${Math.round(d.temperature_2m_max[i])}°C</td><td>${Math.round(d.wind_speed_10m_max[i])} km/h</td></tr>`).join('');
  $('rows').querySelectorAll('[data-day]').forEach(b=>b.onclick=()=>{selectDay(Number(b.dataset.day));$('hourly-panel')?.scrollIntoView({behavior:'smooth',block:'start'})});
- const outlook=skiOutlook(data,{lang,snow,date,timezone:resorts[key].timezone});
- $('outlook-title').textContent=outlook.title;
- $('outlook').textContent=outlook.paragraphs.join('\n\n');
- $('outlook-note').textContent=outlook.note;
- $('outlook-stamp').textContent=t('对应天气数据：','Based on weather data: ')+new Date(data.updatedAt).toLocaleString(locale(),{timeZone:resorts[key].timezone})+(data.stale?t(' · 数据已过期，请谨慎参考',' · Stale data — use caution'):'');detail();
+ renderExperience();detail();
 }
 async function load(){
  const id=++request;data=null;selected=0;hourlyOpen=false;loading=true;failed=false;timedOut=false;render();document.querySelector('.chart-panel').classList.add('loading');
@@ -170,4 +166,26 @@ function renderParking(){
  $('parking-source').textContent=t('停车运营方规则 ↗','Operator rules ↗');$('parking-source').href=brightonParking.source;
  $('parking-resort-source').textContent=t('雪场停车信息 ↗','Resort parking information ↗');$('parking-resort-source').href=brightonParking.resortSource;
  $('parking-verified').textContent=t('规则核实于 ','Rules checked ')+brightonParking.checked+' · '+brightonParking.season+t(' 雪季 · 非实时库存',' season · Not live inventory');
+}
+
+function renderExperience(){
+ const outlook=skiOutlook(data,{lang,snow,date,timezone:resorts[key].timezone}),s=data.summary;
+ const usable=s&&Date.now()-Date.parse(s.generatedAt)<24*3600000&&s.forecastDates?.[0]===data.daily.time[0]&&s[lang]?.text;
+ const stamp=v=>new Date(v).toLocaleString(locale(),{timeZone:resorts[key].timezone,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
+ $('summary-intro').textContent=t('先看这一段，快速了解滑雪体验与未来变化。','Start here — your ski outlook, without decoding the charts.');
+ $('outlook-title').textContent=usable&&!/closed|outlook$|关闭|停业|预报$|展望$/i.test(s[lang].headline)?s[lang].headline:outlook.title;
+ $('outlook').textContent=usable?s[lang].text:outlook.paragraphs.slice(1,4).join(' ');
+ $('summary-feel').textContent=t('雪面体验推测：','Surface outlook: ')+outlook.paragraphs[2];
+ $('outlook-note').textContent=t('体验推测，不代表实测雪面、覆盖或安全评估。历史模型降雪不等于雪场实测。','An experience estimate, not an assessment of observed surfaces, coverage or safety. Historical modeled snow is not resort-measured snow.');
+ $('outlook-stamp').textContent=usable?t('AI 摘要 · 每 12 小时尝试更新 · 生成于 ','AI summary · Refreshes every 12 hours · Generated ')+stamp(s.generatedAt)+t(' · 依据预报 ',' · Forecast as of ')+stamp(s.forecastAt):t('规则摘要后备 · AI 摘要暂不可用 · 依据预报 ','Rule-based fallback · AI summary unavailable · Forecast as of ')+stamp(data.updatedAt);
+ if(data.stale)$('outlook-stamp').textContent+=t(' · 天气数据已过期',' · Weather data is stale');
+ const report=data.report;
+ $('summary-status').textContent=report?.status==='Closed'?t('官方报告：雪场关闭。以下仅为天气展望，不代表当前可滑。','Official report: resort closed. This is a weather outlook, not current skiability.'):report?.status==='outside_winter'?t('官网目前非冬季雪况模式；以下仅为天气展望。','The official site is outside winter reporting mode; this is a weather outlook.'):'';
+ const history=data.history?.daily?.snowfall_sum?.slice(-3),recent=history?.length===3&&history.every(Number.isFinite)?history.reduce((a,b)=>a+b,0):null;
+ const items=[[t('过去 3 个完整日','Past 3 complete days'),recent,t('模型估算','Modeled snow')],[t('未来 3 天','Next 3 days'),data.daily.snowfall_sum.slice(0,3).reduce((a,b)=>a+b,0),t('预报新增降雪','Forecast new snow')],[t('Base / 基础雪深','Base depth'),report?.baseCm,t('雪场官方报告','Resort-reported')],[t('官方过去 24 小时','Official past 24h'),report?.snow24Cm,t('雪场报告新增降雪','Resort-reported new snow')]];
+ $('summary-facts').replaceChildren(...items.map(([label,value,note])=>{const div=document.createElement('div');div.className='summary-fact';const a=document.createElement('span'),b=document.createElement('strong'),c=document.createElement('span');a.textContent=label;b.textContent=Number.isFinite(value)?snow(value):'—';c.textContent=Number.isFinite(value)?note:t('暂未公布／未接入','Not published / not connected');div.append(a,b,c);return div}));
+ $('summary-source').replaceChildren();
+ if(report){const a=document.createElement('a');a.href=report.url;a.target='_blank';a.rel='noreferrer';a.textContent=t('官方雪况 ↗','Official snow report ↗');$('summary-source').append(a,document.createTextNode(t(' · 报告时间：',' · Report time: ')+report.reportedAt+t(' · 获取于 ',' · Retrieved ')+stamp(report.fetchedAt)+(report.stale?t(' · 旧数据，请查官网',' · Old data; verify officially'):'')+(report.seasonHidden?t(' · 官网暂未公布冬季雪量指标',' · Winter snow metrics are not currently published'):'')+t('。雪深不代表所有区域覆盖。','. Base depth does not establish coverage across terrain.')))}
+ else $('summary-source').textContent=t('此雪场的官方 base 和实测新增降雪尚未接入；不以模型估算替代。','Official base depth and observed new snow are not connected for this resort; model estimates are not substituted.');
+ $('summary-details-label').textContent=t('查看依据与数据局限','See supporting data and limitations');$('summary-reasoning').textContent=outlook.paragraphs.join('\n\n');
 }
