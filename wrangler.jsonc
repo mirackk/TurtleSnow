@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "wasatch-snow",
+  "name": "turtlesnow",
   "main": "src/worker.js",
   "compatibility_date": "2026-10-15",
   "workers_dev": true,

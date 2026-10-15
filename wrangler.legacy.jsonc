@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wasatch-snow",
+  "main": "src/legacy-redirect.js",
+  "compatibility_date": "2026-10-15",
+  "account_id": "43b5ffa383e06b416f11a0e935fe7b79",
+  "workers_dev": true,
+  "triggers": { "crons": [] }
+}

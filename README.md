@@ -1,5 +1,9 @@
 # turtleSnow · 滑雪天气预报
 
+Website: https://turtlesnow.wasatch-snow.workers.dev
+
+Source: https://github.com/mirackk/TurtleSnow
+
 Public, login-free Brighton / Alta 15-day snow forecasts. Existing dark responsive UI preserved from Sites commit `21871e1efdfc8c2d50ee6d1f5e14c80ac8f24583`.
 
 ## Data flow
