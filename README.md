@@ -63,3 +63,11 @@ Click a forecast bar or a date in the daily weather table to reveal hourly detai
 Open-Meteo hourly snowfall represents the preceding hour. Stored hourly timestamps are Unix seconds; the UI assigns each sample to the interval `[timestamp − 1 hour, timestamp]` and groups it by the start date in the resort timezone. Temperature and wind represent the interval end. DST days may contain 23 or 25 intervals. Missing values display as unavailable, not zero, and incomplete period snowfall does not produce a numeric total.
 
 The server requests 16 forecast days plus 7 past days in the same hourly refresh. Only 15 daily forecast days and their complete hourly intervals are exposed; the extra day supplies the final midnight endpoint. Daily dates are normalized back to ISO calendar strings; hourly timestamps remain Unix seconds. The whole snapshot is retained if hourly arrays or coverage are malformed. Individual null hourly values remain explicitly unavailable. This keeps nine scheduled upstream requests per hour, though provider usage weighting can increase with the extra variables/time range.
+
+## Brighton parking guidance
+
+Brighton has a client-side general-parking rule checker with date and arrival time in America/Denver. It links to the official Inflow booking page; no parking inventory API, credentials, paid service or live occupancy feed is connected. Other resorts do not display Brighton's rules.
+
+Sources checked 2026-10-15: https://www.parkbrightonresort.com/reservenski and https://www.brightonresort.com/getting-here-and-parking. The verified operator calendar covers Dec 4, 2026–Apr 18, 2027; dates outside it are unconfirmed, not assumed reservation-free. General parking requires reservations 07:00–12:00 Fri–Sun and published holidays, except Dec 25. Jan 19 and Feb 16 are unconfirmed because the resort FAQ and operator calendar disagree. Preferred Parking has separate rules and is excluded from the general-parking result. Summer/opening/closing dates are not inferred.
+
+The UI labels live availability as not connected and separates rule status from inventory. Free passholder parking still requires reservations when applicable; reservation-free parking is not a guarantee of an open space. API access and pricing have not been confirmed with Inflow; no operator has been contacted.

@@ -63,3 +63,11 @@ The old Sites demo remains on its original deployment. The new cached implementa
 - Eight integration tests passed, including full final-day midnight coverage, 23/25-hour DST days, null handling, malformed-hourly snapshot retention and cache-only visitor behavior.
 - Production browser verified chart/table date selection, last-day bounds, next-day arrows, close behavior, English/Chinese, cm/inch, four period cards, 24 hourly rows and no document overflow at 390px. Screenshot: `turtleSnow-hourly.png` in the parent workspace.
 - The extra upstream day is trimmed from daily forecasts and used only to complete the last hourly interval. Missing values and uncertain long-range timing are disclosed.
+
+## Brighton parking rule checker
+
+- Deployed Brighton-only bilingual parking card with date/time controls, explicit rule status, official booking/source links and published release-time guidance.
+- No live inventory API or paid parking-data subscription was integrated. API pricing is not publicly confirmed; no fees or credential changes were incurred.
+- Two parking tests passed: enforcement boundaries, Christmas exception, holidays, conflicting official dates, invalid input and dates outside the verified calendar.
+- Production browser verified Fri Dec 4 at 09:00 requires reservations, 12:00 does not, Jan 19 is unconfirmed, card hides on Alta, and English/Chinese render at 390px without document overflow.
+- Runtime version: 893452d3-8929-4c95-a7c5-59a653a40995.

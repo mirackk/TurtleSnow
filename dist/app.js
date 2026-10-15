@@ -1,4 +1,5 @@
 import { dayHours, summarize } from './hourly.js';
+import { brightonParking, parkingStatus } from './parking.js';
 import { resorts } from './resorts.js';
 import { translations } from './translations.js';
 const $=id=>document.getElementById(id);
@@ -6,6 +7,7 @@ const saved=k=>{try{return localStorage.getItem(k)}catch{return null}};
 const save=(k,v)=>{try{localStorage.setItem(k,v)}catch{}};
 let lang=saved('snow-language')==='zh'?'zh':'en', unit=saved('snow-unit')==='inch'?'inch':'cm', key=saved('snow-resort')||'brighton';
 if(!Object.hasOwn(resorts,key))key='brighton';
+let parkingDay=null,parkingTime='09:00';
 let hourlyOpen=false;
 let data=null, selected=0, request=0, table=false, loading=false, failed=false, timedOut=false;
 const t=(zh,en)=>lang==='en'?en:zh;
@@ -66,7 +68,7 @@ function renderHistory(){
  $('history-days').innerHTML=h.time.map((day,i)=>`<div class="history-day" aria-label="${day}, ${t('历史模型降雪','historical modeled snowfall')} ${snow(h.snowfall_sum[i])}"><div class="history-bar-space"><span class="bar-value">${num(h.snowfall_sum[i])}</span><div class="history-bar" style="height:${Math.max(3,h.snowfall_sum[i]/max*64)}px"></div></div><div class="weekday">${weekday(day)}</div><div class="date">${date(day)}</div></div>`).join('');
 }
 function render(){
- staticText();status();renderHistory();renderHourly();['cm','inch'].forEach(u=>{$(u).classList.toggle('active',u===unit);$(u).setAttribute('aria-pressed',String(u===unit))});
+ staticText();status();renderParking();renderHistory();renderHourly();['cm','inch'].forEach(u=>{$(u).classList.toggle('active',u===unit);$(u).setAttribute('aria-pressed',String(u===unit))});
  if(!data){
  ['sum1','sum2','sum3'].forEach(id=>$(id).textContent='—');['range1','range2','range3'].forEach(id=>$(id).textContent=t('等待预报','Awaiting forecast'));
  $('chart').replaceChildren();$('rows').replaceChildren();$('total').textContent=t('正在加载','Loading');$('detail').textContent=failed?t('数据暂不可用；请刷新重试。','Data unavailable. Please refresh to retry.'):t('正在读取预报…','Loading forecast…');
@@ -94,14 +96,14 @@ async function load(){
  }catch(error){if(id!==request)return;failed=true;timedOut=error.name==='AbortError';}
  finally{clearTimeout(timer);if(id===request){loading=false;document.querySelector('.chart-panel').classList.remove('loading');render();}}
 }
-$('resort').onchange=e=>{key=e.target.value;save('snow-resort',key);document.querySelector('.scroll').scrollLeft=0;load()};
+$('resort').onchange=e=>{key=e.target.value;parkingDay=null;save('snow-resort',key);document.querySelector('.scroll').scrollLeft=0;load()};
 $('language').onchange=e=>{lang=e.target.value==='en'?'en':'zh';save('snow-language',lang);render()};
 $('refresh').onclick=load;
 ['cm','inch'].forEach(u=>$(u).onclick=()=>{unit=u;save('snow-unit',u);render()});
 function tab(showTable){table=showTable;$('table-view').classList.toggle('hidden',!table);$('chart-view').classList.toggle('hidden',table);['table','chart'].forEach(name=>{const active=(name==='table')===table;$(name+'-tab').classList.toggle('active',active);$(name+'-tab').setAttribute('aria-pressed',String(active))});render()}
 $('table-tab').onclick=()=>tab(true);$('chart-tab').onclick=()=>tab(false);load();
 
-function selectDay(index,reveal=false){selected=index;hourlyOpen=true;detail();if(reveal)$('hourly-panel')?.scrollIntoView({behavior:'smooth',block:'start'})}
+function selectDay(index,reveal=false){selected=index;parkingDay=data.daily.time[index];renderParking();hourlyOpen=true;detail();if(reveal)$('hourly-panel')?.scrollIntoView({behavior:'smooth',block:'start'})}
 $('hourly-close')?.addEventListener('click',()=>{hourlyOpen=false;detail()});
 $('hourly-prev')?.addEventListener('click',()=>{if(selected>0)selectDay(selected-1)});
 $('hourly-next')?.addEventListener('click',()=>{if(selected<14)selectDay(selected+1)});
@@ -126,4 +128,28 @@ function renderHourly(){
  $('hourly-table-label').textContent=t('查看逐小时天气表','View hourly weather table');
  $('hourly-head').innerHTML='<tr>'+[t('当地时段','Local interval'),t('降雪','Snowfall'),t('气温','Temp.'),t('风速','Wind'),t('阵风','Gusts'),t('降水概率','Precip. chance')].map(x=>`<th>${x}</th>`).join('')+'</tr>';
  $('hourly-rows').innerHTML=hours.map(h=>`<tr><td>${h.startTime}–${h.endTime} ${h.zone}</td><td>${s(h.snowfall)}</td><td>${n(h.temperature_2m)}°C</td><td>${n(h.wind_speed_10m)} km/h</td><td>${n(h.wind_gusts_10m)} km/h</td><td>${n(h.precipitation_probability)}${h.precipitation_probability===null?'':'%'}</td></tr>`).join('');
+}
+
+$('parking-date')?.addEventListener('change',e=>{parkingDay=e.target.value;renderParking()});
+$('parking-time')?.addEventListener('change',e=>{parkingTime=e.target.value;renderParking()});
+function renderParking(){
+ const panel=$('parking-panel');if(!panel)return;panel.classList.toggle('hidden',key!=='brighton');if(key!=='brighton')return;
+ const day=parkingDay??data?.daily?.time[selected]??today(),state=parkingStatus(day,parkingTime);
+ $('parking-date').value=day;$('parking-time').value=parkingTime;
+ $('parking-eyebrow').textContent=t('出行计划 / PARKING','PLAN YOUR ARRIVAL');$('parking-title').textContent=t('Brighton 停车','Brighton parking');
+ $('parking-date-label').textContent=t('到达日期（雪场当地时间）','Arrival date (resort local time)');$('parking-time-label').textContent=t('到达时间 · 山地时间','Arrival time · Mountain Time');
+ const labels={required:t('需要预约 · 普通停车','Reservation required · General parking'),not_required:t('无需预约 · 普通停车','No reservation required · General parking'),closed:t('停车场关闭 · 00:00–07:00','Parking lots closed · 00:00–07:00'),unconfirmed:t('预约要求待官方确认','Reservation requirement unconfirmed'),outside_window:t('此日期尚无已核实的冬季规则','No verified winter rule for this date')};
+ $('parking-status').textContent=labels[state];$('parking-status').dataset.status=state;
+ const explanations={required:t('所选日期 07:00–12:00 需要预约。免费季票预约也必须预订。','A reservation is required from 07:00 to 12:00 on this date, including complimentary passholder reservations.'),not_required:parkingTime>='12:00'?t('普通停车中午 12:00 后不要求预约；是否有现场空位仍需确认。','General parking does not require reservations after noon. On-site space is still subject to availability.'):t('按已公布日期表，此时段普通停车无需预约，先到先得。Preferred Parking 规则不同。','The published calendar does not require a general-parking reservation for this interval. First come, first served; Preferred Parking has separate rules.'),closed:t('冬季停车场每日凌晨关闭清雪，请选择 07:00 或之后到达。','Winter lots close overnight for snow clearing. Choose an arrival time of 07:00 or later.'),unconfirmed:t('日期输入无效，或官方页面存在冲突。请打开官方预约页面核实，勿按“无需预约”安排出行。','The date/time is invalid or official pages conflict. Check the official reservation site before planning your arrival.'),outside_window:t('当前仅核实 2026/12/4–2027/4/18 的公布预约日期范围；这不代表所选日期开放或无需预约。','The verified published reservation-calendar window is Dec 4, 2026–Apr 18, 2027. This does not establish opening status or reservation requirements outside that window.')};
+ $('parking-explanation').textContent=explanations[state];
+ $('parking-book').textContent=t('查看余位并前往官方预约 ↗','Check availability & book officially ↗');$('parking-book').href=brightonParking.booking;
+ $('parking-availability-title').textContent=t('可订名额 / 现场空位：尚未接入','Bookable spaces / live occupancy: not connected');
+ $('parking-availability-note').textContent=t('这里仅显示预约规则，不提供实时余位。普通、拼车和季票名额可能不同，请在官方平台确认。','This panel shows rules, not live inventory. General, carpool and passholder allocations may differ; verify availability on the official platform.');
+ $('parking-more-title').textContent=t('查看规则、放号时间与来源','Rules, release times & sources');
+ $('parking-rule-note').textContent=t('2026–27：12/4 起，周五至周日及指定假日 07:00–12:00 需预约；12/25 例外。按运营方日期表判断；1/19、2/16 因官网日期冲突保留为待确认。Preferred Parking 请另查官方规则。','2026–27: reservations apply 07:00–12:00 on Fridays–Sundays and listed holidays from Dec 4, except Dec 25. Uses the operator calendar; Jan 19 and Feb 16 remain unconfirmed because official pages conflict. Check Preferred Parking separately.');
+ $('parking-release-note').textContent=t('公布放号时间：周一 18:00；到达前一天 08:00、14:00。取消名额可能重新放出；以官方当日安排为准。','Published releases: Monday at 18:00, then 08:00 and 14:00 the day before arrival. Cancellations may reopen inventory; confirm current details officially.');
+ $('parking-pass-note').textContent=t('免费停车不等于无需预约；无需预约也不保证有空位。','Complimentary parking can still require a reservation. No reservation requirement does not guarantee an open space.');
+ $('parking-source').textContent=t('停车运营方规则 ↗','Operator rules ↗');$('parking-source').href=brightonParking.source;
+ $('parking-resort-source').textContent=t('雪场停车信息 ↗','Resort parking information ↗');$('parking-resort-source').href=brightonParking.resortSource;
+ $('parking-verified').textContent=t('规则核实于 ','Rules checked ')+brightonParking.checked+' · '+brightonParking.season+t(' 雪季 · 非实时库存',' season · Not live inventory');
 }
