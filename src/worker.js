@@ -15,11 +15,23 @@ export function validate(data, timezone = 'America/Denver', days = 15) {
   }
   return data;
 }
+export function zonedMidnight(date,timezone){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw Error('Missing calendar boundary');
+ const target=Date.parse(date+'T00:00:00Z');let value=target;
+ const fmt=new Intl.DateTimeFormat('en-US',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
+ for(let i=0;i<3;i++){const p=Object.fromEntries(fmt.formatToParts(new Date(value)).map(p=>[p.type,p.value]));const wall=Date.parse(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}Z`);value+=target-wall;}
+ return value/1000;
+}
 export function splitForecast(raw, timezone, now) {
   if (!raw?.daily?.time) throw new Error('Missing daily data');
-  const firstHour=raw.daily.time[7], lastHour=raw.daily.time[22];
-  if(!Number.isFinite(firstHour)||!Number.isFinite(lastHour))throw new Error('Missing hourly boundaries');
-  raw = {...raw, daily: Object.fromEntries(Object.entries(raw.daily).map(([k,v])=>[k,k==='time'?v.slice(0,22).map(n=>typeof n==='number'?localDate(n,timezone):n):v.slice(0,22)]))};
+  // Open-Meteo daily Unix dates use one utc_offset_seconds for the entire
+  // response, even when the forecast crosses a DST transition. They are
+  // calendar labels, not actual IANA-local midnight instants.
+  if(!Number.isFinite(raw.utc_offset_seconds))throw new Error('Missing daily UTC offset');
+  const dailyDates=raw.daily.time.map(n=>Number.isFinite(n)?new Date((n+raw.utc_offset_seconds)*1000).toISOString().slice(0,10):null);
+  if(dailyDates.some(d=>!d))throw new Error('Invalid daily dates');
+  const firstHour=zonedMidnight(dailyDates[7],timezone),lastHour=zonedMidnight(dailyDates[22],timezone);
+  raw = {...raw, daily: Object.fromEntries(Object.entries(raw.daily).map(([k,v])=>[k,k==='time'?dailyDates.slice(0,22):v.slice(0,22)]))};
   validate(raw, timezone, 22);
   const h=raw.hourly;
   if(!h?.time?.length || !h.time.every((n,i)=>Number.isFinite(n)&&(!i||n-h.time[i-1]===3600)) || hourlyFields.some(k=>h[k]?.length!==h.time.length || !h[k].every(v=>v===null||Number.isFinite(v)))) throw new Error('Incomplete hourly data');
@@ -48,9 +60,9 @@ export async function refresh(env, fetcher = fetch, now = () => new Date()) {
       const forecast = splitForecast(await response.json(), location.timezone, now());
       // No TTL: the last valid forecast survives upstream outages.
       await env.FORECASTS.put(`forecast:${key}`, JSON.stringify({ ...forecast, updatedAt: now().toISOString() }));
-      await env.FORECASTS.put(`status:${key}`, JSON.stringify({ attemptedAt, ok: true }));
+      // A successful snapshot timestamp also records success; avoid a second KV write.
     } catch (error) {
-      await env.FORECASTS.put(`status:${key}`, JSON.stringify({ attemptedAt, ok: false }));
+      await env.FORECASTS.put(`status:${key}`, JSON.stringify({ attemptedAt, ok: false, error: String(error.message).slice(0,180) }));
       console.error(`Forecast refresh failed: ${key}`, error.message);
       throw error;
     }
@@ -69,11 +81,12 @@ export default {
     const key = url.searchParams.get('resort') || 'brighton';
     if (!Object.hasOwn(resorts, key)) return Response.json({ error: 'Unknown resort' }, { status: 400, headers });
     // Visitors only read shared storage. They never trigger upstream calls.
-    const [forecast, status, summary, report, reportStatus] = await Promise.all([
+    const [forecast, savedStatus, summary, report, reportStatus] = await Promise.all([
       env.FORECASTS.get(`forecast:${key}`, 'json'), env.FORECASTS.get(`status:${key}`, 'json'),
       env.FORECASTS.get(`summary:${key}`, 'json'), env.FORECASTS.get(`report:${key}`, 'json'), env.FORECASTS.get(`report-status:${key}`, 'json')
     ]);
     if (!forecast) return Response.json({ error: 'Forecast not initialized' }, { status: 503, headers: { ...headers, 'Retry-After': '300' } });
+    const status = savedStatus && Date.parse(savedStatus.attemptedAt)>Date.parse(forecast.updatedAt) ? savedStatus : {attemptedAt:forecast.updatedAt,ok:true};
     const stale = Date.now() - Date.parse(forecast.updatedAt) > 90 * 60 * 1000 || status?.ok === false;
     return Response.json({ ...forecast, summary, report: report ? {...report, stale: reportStatus?.ok === false || Date.now()-Date.parse(report.fetchedAt)>2*3600000} : null, stale, lastAttemptAt: status?.attemptedAt || null, lastRefreshOk: status?.ok ?? null }, { headers });
   },

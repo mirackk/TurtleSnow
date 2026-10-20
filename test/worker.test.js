@@ -5,7 +5,7 @@ function store() { const m = new Map(); return { m, async put(k,v) { m.set(k,v);
 function fixture(timezone = 'America/Denver') {
  const offset=timezone==='America/New_York'?4:timezone==='America/Los_Angeles'?7:6;
  const start=Date.parse('2026-10-08T00:00:00Z')/1000+offset*3600;
- return { timezone, daily: {time:Array.from({length:23},(_,i)=>start+i*86400),...Object.fromEntries(['snowfall_sum','temperature_2m_max','temperature_2m_min','wind_speed_10m_max'].map(k=>[k,Array(23).fill(2)]))},hourly:{time:Array.from({length:23*24},(_,i)=>start+i*3600),...Object.fromEntries(['snowfall','temperature_2m','wind_speed_10m','wind_gusts_10m','precipitation_probability'].map(k=>[k,Array(23*24).fill(k==='snowfall'?0.1:2)]))}};
+ return { timezone, utc_offset_seconds:-offset*3600, daily: {time:Array.from({length:23},(_,i)=>start+i*86400),...Object.fromEntries(['snowfall_sum','temperature_2m_max','temperature_2m_min','wind_speed_10m_max'].map(k=>[k,Array(23).fill(2)]))},hourly:{time:Array.from({length:23*24},(_,i)=>start+i*3600),...Object.fromEntries(['snowfall','temperature_2m','wind_speed_10m','wind_gusts_10m','precipitation_probability'].map(k=>[k,Array(23*24).fill(k==='snowfall'?0.1:2)]))}};
 }
 test('hourly run fetches all nine local timezones; visitors only read KV', async () => {
   const kv=store(), calls=[]; const env={FORECASTS:kv};
@@ -65,4 +65,20 @@ test('local interval grouping handles DST and missing snow is not zero',async()=
   const hourly={time:Array.from({length:count},(_,i)=>Date.parse(start)/1000+(i+1)*3600),snowfall:Array(count).fill(1)};
   const hours=dayHours(hourly,day,'America/New_York');assert.equal(hours.length,count);assert.equal(summarize(hours).snowfall,count);hours[0].snowfall=null;assert.equal(summarize(hours).snowfall,null);
  }
+});
+
+test('daily fixed-offset dates survive both DST transitions in all US resort zones',async()=>{
+ const {splitForecast,zonedMidnight}=await import('../src/worker.js');const {dayHours}=await import('../dist/hourly.js');
+ for(const zone of ['America/Denver','America/New_York','America/Los_Angeles'])for(const [today,offset] of [['2026-10-20',zone==='America/Denver'?-6:zone==='America/New_York'?-4:-7],['2026-03-01',zone==='America/Denver'?-7:zone==='America/New_York'?-5:-8]]){
+  const anchor=Date.parse(today+'T00:00:00Z')/1000;const raw=fixture(zone);raw.utc_offset_seconds=offset*3600;
+  raw.daily.time=Array.from({length:23},(_,i)=>anchor+(i-7)*86400-raw.utc_offset_seconds);
+  const start=zonedMidnight(new Date((anchor-7*86400)*1000).toISOString().slice(0,10),zone),end=zonedMidnight(new Date((anchor+16*86400)*1000).toISOString().slice(0,10),zone);
+  raw.hourly.time=Array.from({length:(end-start)/3600+1},(_,i)=>start+i*3600);for(const k of ['snowfall','temperature_2m','wind_speed_10m','wind_gusts_10m','precipitation_probability'])raw.hourly[k]=Array(raw.hourly.time.length).fill(1);
+  const result=splitForecast(raw,zone,new Date(today+'T18:00:00Z'));assert.equal(result.daily.time[0],today);assert.equal(result.daily.time.length,15);assert.equal(result.hourly.time.length,today.startsWith('2026-10')?361:359);
+  const changeDay=today.startsWith('2026-10')?'2026-11-01':'2026-03-08';assert.equal(dayHours(result.hourly,changeDay,zone).length,today.startsWith('2026-10')?25:23);
+ }
+});
+test('a successful refresh supersedes an earlier failure without writing a second status key',async()=>{
+ const kv=store(),now=()=>new Date('2026-10-15T17:00:00Z');await kv.put('status:brighton',JSON.stringify({attemptedAt:'2026-10-15T16:00:00Z',ok:false}));const writes=[];const put=kv.put;kv.put=async(k,v)=>{writes.push(k);await put(k,v)};
+ await refresh({FORECASTS:kv},async u=>Response.json(fixture(u.searchParams.get('timezone'))),now);assert.equal(writes.length,9);const d=await(await worker.fetch(new Request('https://snow.test/api/forecast?resort=brighton'),{FORECASTS:kv})).json();assert.equal(d.lastRefreshOk,true);assert.equal(d.lastAttemptAt,'2026-10-15T17:00:00.000Z');
 });
