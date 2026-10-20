@@ -1,3 +1,4 @@
+import { weatherStore } from './weather-store.js';
 import {resorts} from '../dist/resorts.js';
 export const MODEL='@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 export function validateSummary(raw,officialStatus='unknown'){
@@ -25,14 +26,14 @@ export async function refreshSummaries(env,now=()=>new Date()){
  if(!env.AI)return;
  const stamp=now(),day=stamp.toISOString().slice(0,10),slot=day+'T'+(stamp.getUTCHours()<12?'00':'12')+':summary-week-v1';
  for(const [key,r] of Object.entries(resorts)){
-  const forecast=await env.FORECASTS.get('forecast:'+key,'json');
+  const forecast=await weatherStore(env).get('forecast:'+key,'json');
   if(!forecast||stamp-Date.parse(forecast.updatedAt)>90*60000)continue;
   // Reserve before calling AI: no visitor-triggered generation, retries, or burst billing.
   const claim=await env.FEEDBACK_DB.prepare(`INSERT OR IGNORE INTO summary_runs(resort,slot,day) SELECT ?,?,? WHERE (SELECT COUNT(*) FROM summary_runs WHERE day=?)<18`).bind(key,slot,day,day).run();
   if(!claim.meta.changes)continue;
   try{
-   const report=['brighton','alta'].includes(key)?await env.FORECASTS.get('report:'+key,'json'):null;
-   const reportStatus=report?await env.FORECASTS.get('report-status:'+key,'json'):null;
+   const report=['brighton','alta'].includes(key)?await weatherStore(env).get('report:'+key,'json'):null;
+   const reportStatus=report?await weatherStore(env).get('report-status:'+key,'json'):null;
    const recentReport=report&&reportStatus?.ok!==false&&stamp-Date.parse(report.fetchedAt)<2*3600000&&report.reportedAt.slice(0,10)===new Intl.DateTimeFormat('en-CA',{timeZone:r.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(stamp)?report:null;
    const facts=weeklyFacts(forecast,r,recentReport);
    const system='Write a skier experience summary covering BOTH the PAST seven completed local days and the NEXT seven forecast days using ONLY the supplied facts. Return JSON exactly {"en":{"headline":"short useful headline","past":"one sentence explicitly labeling past snow as modeled estimates","next":"one or two sentences comparing near-term versus later-week forecast snow","experience":"one or two conditional sentences about surface changes and wind"},"zh":{"headline":"自然简体中文短标题","past":"过去七天的模型估算降雪背景，不得写成实测","next":"未来七天，区分近期与后半段趋势","experience":"气温及风可能带来的体验变化"}}. Total at most one hundred English words and two hundred forty Chinese characters per language. Never describe past snow as future snow. Later-week timing/amounts are less certain. Forecasts do not establish current surfaces or skiability. No snow does not mean dry weather. Do not invent observed powder, base, visibility, roads, openings or safety. Present Closed status is not a forecast of continued closure. Mention status only when supplied and relevant; omit unknown status. Exact numbers are in separate cards: NO digits or numerical amounts in prose. Retain resort names in English. Use fluent Chinese skiing terms. Never infer lift closures from wind. Use conditional language for snow quality.';
@@ -40,7 +41,7 @@ export async function refreshSummaries(env,now=()=>new Date()){
    const raw=result.response??result.choices?.[0]?.message?.content;
    const text=validateSummary(raw,facts.officialStatus);
    if(/\bdry\b|干燥|reports? (?:no |new )?snow|no recent snowfall|currently (?:has |experiencing )?(?:no )?snow|remain closed|forecast[^.]*closed|modeled snow is expected|风况变化不定/i.test(text.en.text+' '+text.en.headline+' '+text.zh.text))throw Error('Unsupported condition claim');
-   await env.FORECASTS.put('summary:'+key,JSON.stringify({...text,model:MODEL,generatedAt:now().toISOString(),forecastAt:forecast.updatedAt,windowDays:7,historyDates:forecast.history?.daily?.time?.slice(-7)??[],forecastDates:forecast.daily.time.slice(0,7)}));
+   await weatherStore(env).put('summary:'+key,JSON.stringify({...text,model:MODEL,generatedAt:now().toISOString(),forecastAt:forecast.updatedAt,windowDays:7,historyDates:forecast.history?.daily?.time?.slice(-7)??[],forecastDates:forecast.daily.time.slice(0,7)}));
   }catch(error){console.error('AI summary retained/fallback: '+key+' '+error.message)}
  }
 }

@@ -1,3 +1,4 @@
+import { weatherStore } from './weather-store.js';
 const brightonURL='https://www.brightonresort.com/api/reportpal?resortName=br&useReportPal=true';
 const number=(v,max=1500)=>v!==null&&v!==undefined&&String(v).trim()!==''&&Number.isFinite(Number(v))&&Number(v)>=0&&Number(v)<=max?Number(v):null;
 export function parseBrighton(d){
@@ -12,7 +13,7 @@ export function parseAlta(html){
 function convert(n){const v=number(n,600);return v===null?null:Math.round(v*2.54*10)/10}
 export async function refreshReports(env,fetcher=fetch,now=()=>new Date()){
  for(const [key,url,parser] of [['brighton',brightonURL,parseBrighton],['alta','https://www.alta.com/weather',parseAlta]]){
-  try{const r=await fetcher(url,{signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error('Report unavailable');const report=parser(key==='brighton'?await r.json():await r.text());await env.FORECASTS.put('report:'+key,JSON.stringify({...report,fetchedAt:now().toISOString()}));await env.FORECASTS.put('report-status:'+key,JSON.stringify({ok:true}));}
-  catch{await env.FORECASTS.put('report-status:'+key,JSON.stringify({ok:false}));console.error('Official report refresh failed: '+key)}
+  try{const r=await fetcher(url,{signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error('Report unavailable');const report=parser(key==='brighton'?await r.json():await r.text());await weatherStore(env).put('report:'+key,JSON.stringify({...report,fetchedAt:now().toISOString()}));await weatherStore(env).put('report-status:'+key,JSON.stringify({ok:true}));}
+  catch{await weatherStore(env).put('report-status:'+key,JSON.stringify({ok:false}));console.error('Official report refresh failed: '+key)}
  }
 }

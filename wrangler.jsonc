@@ -12,12 +12,6 @@
       "/api/*"
     ]
   },
-  "kv_namespaces": [
-    {
-      "binding": "FORECASTS",
-      "id": "e992f19c58074ecf879be71bf17062a7"
-    }
-  ],
   "triggers": {
     "crons": [
       "0 * * * *",
@@ -29,6 +23,12 @@
       "binding": "FEEDBACK_DB",
       "database_name": "turtlesnow-feedback",
       "database_id": "4aef3d7e-1e74-43fc-95c0-a6b0d1406d8a"
+    },
+    {
+      "binding": "WEATHER_DB",
+      "database_name": "turtlesnow-weather",
+      "database_id": "0135e1ca-1537-4c3a-a561-05532cf042d0",
+      "migrations_dir": "weather-migrations"
     }
   ],
   "ai": {

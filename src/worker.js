@@ -1,3 +1,4 @@
+import { weatherStore } from './weather-store.js';
 import { refreshReports } from './reports.js';
 import { refreshSummaries } from './summaries.js';
 import { feedback } from './feedback.js';
@@ -59,10 +60,10 @@ export async function refresh(env, fetcher = fetch, now = () => new Date()) {
       if (!response.ok) throw new Error(`Upstream HTTP ${response.status}`);
       const forecast = splitForecast(await response.json(), location.timezone, now());
       // No TTL: the last valid forecast survives upstream outages.
-      await env.FORECASTS.put(`forecast:${key}`, JSON.stringify({ ...forecast, updatedAt: now().toISOString() }));
+      await weatherStore(env).put(`forecast:${key}`, JSON.stringify({ ...forecast, updatedAt: now().toISOString() }));
       // A successful snapshot timestamp also records success; avoid a second KV write.
     } catch (error) {
-      await env.FORECASTS.put(`status:${key}`, JSON.stringify({ attemptedAt, ok: false, error: String(error.message).slice(0,180) }));
+      await weatherStore(env).put(`status:${key}`, JSON.stringify({ attemptedAt, ok: false, error: String(error.message).slice(0,180) }));
       console.error(`Forecast refresh failed: ${key}`, error.message);
       throw error;
     }
@@ -82,8 +83,8 @@ export default {
     if (!Object.hasOwn(resorts, key)) return Response.json({ error: 'Unknown resort' }, { status: 400, headers });
     // Visitors only read shared storage. They never trigger upstream calls.
     const [forecast, savedStatus, summary, report, reportStatus] = await Promise.all([
-      env.FORECASTS.get(`forecast:${key}`, 'json'), env.FORECASTS.get(`status:${key}`, 'json'),
-      env.FORECASTS.get(`summary:${key}`, 'json'), env.FORECASTS.get(`report:${key}`, 'json'), env.FORECASTS.get(`report-status:${key}`, 'json')
+      weatherStore(env).get(`forecast:${key}`, 'json'), weatherStore(env).get(`status:${key}`, 'json'),
+      weatherStore(env).get(`summary:${key}`, 'json'), weatherStore(env).get(`report:${key}`, 'json'), weatherStore(env).get(`report-status:${key}`, 'json')
     ]);
     if (!forecast) return Response.json({ error: 'Forecast not initialized' }, { status: 503, headers: { ...headers, 'Retry-After': '300' } });
     const status = savedStatus && Date.parse(savedStatus.attemptedAt)>Date.parse(forecast.updatedAt) ? savedStatus : {attemptedAt:forecast.updatedAt,ok:true};
