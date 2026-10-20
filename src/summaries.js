@@ -1,5 +1,7 @@
 import { weatherStore } from './weather-store.js';
 import {resorts} from '../dist/resorts.js';
+export const DAILY_SUMMARY_LIMIT=32;
+export function summaryBatch(index){return Object.keys(resorts).sort().slice(index*8,(index+1)*8)}
 export const MODEL='@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 export function validateSummary(raw,officialStatus='unknown'){
  let d=typeof raw==='string'?JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g,'')):raw;
@@ -22,14 +24,15 @@ export function validateSummary(raw,officialStatus='unknown'){
  if(!/[\u4e00-\u9fff]/.test(d.zh.text))throw Error('Missing Chinese');
  return Object.fromEntries(['en','zh'].map(l=>[l,{headline:d[l].headline.trim(),text:d[l].text.trim()}]));
 }
-export async function refreshSummaries(env,now=()=>new Date()){
+export async function refreshSummaries(env,now=()=>new Date(),keys=Object.keys(resorts)){
  if(!env.AI)return;
  const stamp=now(),day=stamp.toISOString().slice(0,10),slot=day+'T'+(stamp.getUTCHours()<12?'00':'12')+':summary-week-v1';
- for(const [key,r] of Object.entries(resorts)){
+ for(const key of keys){
+  const r=resorts[key];if(!r)continue;
   const forecast=await weatherStore(env).get('forecast:'+key,'json');
   if(!forecast||stamp-Date.parse(forecast.updatedAt)>90*60000)continue;
   // Reserve before calling AI: no visitor-triggered generation, retries, or burst billing.
-  const claim=await env.FEEDBACK_DB.prepare(`INSERT OR IGNORE INTO summary_runs(resort,slot,day) SELECT ?,?,? WHERE (SELECT COUNT(*) FROM summary_runs WHERE day=?)<18`).bind(key,slot,day,day).run();
+  const claim=await env.FEEDBACK_DB.prepare(`INSERT OR IGNORE INTO summary_runs(resort,slot,day) SELECT ?,?,? WHERE (SELECT COUNT(*) FROM summary_runs WHERE day=?)<?`).bind(key,slot,day,day,DAILY_SUMMARY_LIMIT).run();
   if(!claim.meta.changes)continue;
   try{
    const report=['brighton','alta'].includes(key)?await weatherStore(env).get('report:'+key,'json'):null;

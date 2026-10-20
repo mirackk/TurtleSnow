@@ -9,8 +9,9 @@ const entries = [];
 try {
   const results = await refresh({ FORECASTS: { async put(key, value) { entries.push({ key, value }); } } });
   if (results.some(r => r.status === 'rejected')) throw new Error('Seed fetch failed; no data uploaded');
-  const path = join(dir, 'seed.json');
-  await writeFile(path, JSON.stringify(entries));
-  const run = spawnSync(process.execPath, ['node_modules/wrangler/bin/wrangler.js', 'kv', 'bulk', 'put', path, '--binding', 'FORECASTS', '--remote'], { stdio: 'inherit' });
-  if (run.status !== 0) throw new Error('KV upload failed');
+  const path = join(dir, 'seed.sql');
+  const quote = s => "'" + s.replaceAll("'", "''") + "'";
+  await writeFile(path, entries.map(({key,value})=>`INSERT INTO weather_cache(key,value) VALUES(${quote(key)},${quote(value)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value,stored_at=datetime('now');`).join('\n'));
+  const run = spawnSync(process.execPath, ['node_modules/wrangler/bin/wrangler.js', 'd1', 'execute', 'turtlesnow-weather', '--file', path, '--remote'], { stdio: 'inherit' });
+  if (run.status !== 0) throw new Error('D1 upload failed');
 } finally { await rm(dir, { recursive: true, force: true }); }

@@ -1,6 +1,6 @@
 import { weatherStore } from './weather-store.js';
 import { refreshReports } from './reports.js';
-import { refreshSummaries } from './summaries.js';
+import { refreshSummaries, summaryBatch } from './summaries.js';
 import { feedback } from './feedback.js';
 import { hourlyFields, localDate } from '../dist/hourly.js';
 import { resorts } from '../dist/resorts.js';
@@ -61,7 +61,7 @@ export async function refresh(env, fetcher = fetch, now = () => new Date()) {
       const forecast = splitForecast(await response.json(), location.timezone, now());
       // No TTL: the last valid forecast survives upstream outages.
       await weatherStore(env).put(`forecast:${key}`, JSON.stringify({ ...forecast, updatedAt: now().toISOString() }));
-      // A successful snapshot timestamp also records success; avoid a second KV write.
+      // A successful snapshot timestamp also records success; avoid a second database write.
     } catch (error) {
       await weatherStore(env).put(`status:${key}`, JSON.stringify({ attemptedAt, ok: false, error: String(error.message).slice(0,180) }));
       console.error(`Forecast refresh failed: ${key}`, error.message);
@@ -92,7 +92,7 @@ export default {
     return Response.json({ ...forecast, summary, report: report ? {...report, stale: reportStatus?.ok === false || Date.now()-Date.parse(report.fetchedAt)>2*3600000} : null, stale, lastAttemptAt: status?.attemptedAt || null, lastRefreshOk: status?.ok ?? null }, { headers });
   },
   async scheduled(controller, env, ctx) {
-    if (controller.cron === '30 */12 * * *') { await refreshSummaries(env); return; }
+    if (controller.cron === '30 */12 * * *' || controller.cron === '35 */12 * * *') { await refreshSummaries(env,()=>new Date(),summaryBatch(controller.cron.startsWith('30')?0:1)); return; }
     const results = await refresh(env);
     await refreshReports(env);
     if (results.some(r => r.status === 'rejected')) throw new Error('One or more forecasts failed to refresh');

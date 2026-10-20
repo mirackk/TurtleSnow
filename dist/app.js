@@ -27,7 +27,7 @@ function staticText(){
  document.querySelector('.seg').setAttribute('aria-label',t('降雪单位','Snowfall units'));
  document.querySelector('.cards').setAttribute('aria-label',t('累计降雪','Snowfall totals'));
  $('chart').setAttribute('aria-label',t('15 天每日新增降雪图','15-day daily snowfall chart'));
- $('point-label').textContent=t('指定预报点','Forecast point');$('horizon').textContent=t('未来 15 天','Next 15 days');
+ $('point-label').textContent=resorts[key].forecastArea?t(resorts[key].forecastArea+' 山区预报点',resorts[key].forecastArea+' forecast point'):t('指定预报点','Forecast point');$('horizon').textContent=t('未来 15 天','Next 15 days');
  $('source-label').textContent=t('天气数据提供方：','Weather data provided by ');
  $('cache-note').textContent=t('服务端每小时更新 · 共享缓存','Updated hourly · Shared cache');
  $('forecast-note').textContent=t('模型预计新增降雪，非雪场实测；指定海拔不代表整座雪场。','Modeled snowfall, not resort measurements. The forecast elevation does not represent the entire resort.');

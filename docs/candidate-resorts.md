@@ -1,6 +1,6 @@
 # 美国待新增雪场候选
 
-2026-10-20 整理。供用户选择，非客流排名；尚未加入网站。排除现有九个雪场及用户此前排除的 Winter Park。Aspen Mountain、Aspen Highlands、Snowmass 是独立山体，可分别选择。参考 [Ski.com](https://www.ski.com/ski-resorts) 和 [OnTheSnow](https://www.onthesnow.com/united-states/ski-resorts)。
+2026-10-20 整理。供用户选择，非客流排名；整理时均未加入网站；后续已按用户选择加入 Arapahoe Basin、Aspen Snowmass（Snowmass 山区）、Big Sky、Jackson Hole、Mount Snow、Okemo、Snowbasin。排除现有九个雪场及用户此前排除的 Winter Park。Aspen Mountain、Aspen Highlands、Snowmass 是独立山体，可分别选择。参考 [Ski.com](https://www.ski.com/ski-resorts) 和 [OnTheSnow](https://www.onthesnow.com/united-states/ski-resorts)。
 
 | 编号 | 待新增雪场 | 州 |
 |---:|---|---|

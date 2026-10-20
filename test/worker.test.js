@@ -7,10 +7,10 @@ function fixture(timezone = 'America/Denver') {
  const start=Date.parse('2026-10-08T00:00:00Z')/1000+offset*3600;
  return { timezone, utc_offset_seconds:-offset*3600, daily: {time:Array.from({length:23},(_,i)=>start+i*86400),...Object.fromEntries(['snowfall_sum','temperature_2m_max','temperature_2m_min','wind_speed_10m_max'].map(k=>[k,Array(23).fill(2)]))},hourly:{time:Array.from({length:23*24},(_,i)=>start+i*3600),...Object.fromEntries(['snowfall','temperature_2m','wind_speed_10m','wind_gusts_10m','precipitation_probability'].map(k=>[k,Array(23*24).fill(k==='snowfall'?0.1:2)]))}};
 }
-test('hourly run fetches all nine local timezones; visitors only read KV', async () => {
+test('hourly run fetches all sixteen resorts with local timezones; visitors only read KV', async () => {
   const kv=store(), calls=[]; const env={FORECASTS:kv};
   const result=await refresh(env,async url=>{calls.push(url);return Response.json(fixture(url.searchParams.get('timezone')));},()=>new Date('2026-10-15T17:00:00Z'));
-  assert.ok(result.every(r=>r.status==='fulfilled')); assert.equal(calls.length,9);
+  assert.ok(result.every(r=>r.status==='fulfilled')); assert.equal(calls.length,16);
   assert.equal(calls.find(u=>u.searchParams.get('latitude')==='40.598').searchParams.get('elevation'),'2879');
   assert.equal(calls.find(u=>u.searchParams.get('latitude')==='40.588').searchParams.get('elevation'),'2900');
   for (const [key,resort] of Object.entries(resorts)) assert.equal((await kv.get('forecast:'+key)).timezone,resort.timezone);
@@ -80,5 +80,5 @@ test('daily fixed-offset dates survive both DST transitions in all US resort zon
 });
 test('a successful refresh supersedes an earlier failure without writing a second status key',async()=>{
  const kv=store(),now=()=>new Date('2026-10-15T17:00:00Z');await kv.put('status:brighton',JSON.stringify({attemptedAt:'2026-10-15T16:00:00Z',ok:false}));const writes=[];const put=kv.put;kv.put=async(k,v)=>{writes.push(k);await put(k,v)};
- await refresh({FORECASTS:kv},async u=>Response.json(fixture(u.searchParams.get('timezone'))),now);assert.equal(writes.length,9);const d=await(await worker.fetch(new Request('https://snow.test/api/forecast?resort=brighton'),{FORECASTS:kv})).json();assert.equal(d.lastRefreshOk,true);assert.equal(d.lastAttemptAt,'2026-10-15T17:00:00.000Z');
+ await refresh({FORECASTS:kv},async u=>Response.json(fixture(u.searchParams.get('timezone'))),now);assert.equal(writes.length,16);const d=await(await worker.fetch(new Request('https://snow.test/api/forecast?resort=brighton'),{FORECASTS:kv})).json();assert.equal(d.lastRefreshOk,true);assert.equal(d.lastAttemptAt,'2026-10-15T17:00:00.000Z');
 });
