@@ -7,9 +7,9 @@ import {officialWeek} from '../dist/snow-sources.js';
 import {analyzeBacktest,integrateSnow} from '../scripts/backtest-lib.mjs';
 import {refresh,zonedMidnight} from '../src/worker.js';
 
-function pilotFixture(first='2026-11-16'){
+function pilotFixture(first='2026-11-16',days=3){
  const dates=Array.from({length:15},(_,i)=>new Date(Date.parse(first)+i*86400000).toISOString().slice(0,10));
- const start=zonedMidnight(dates[0],'America/Denver'),end=zonedMidnight(dates[3],'America/Denver');
+ const start=zonedMidnight(dates[0],'America/Denver'),end=zonedMidnight(dates[days],'America/Denver');
  const time=Array.from({length:(end-start)/3600+24},(_,i)=>start+(i+1)*3600);
  return {timezone:'America/Denver',daily:{time:dates,snowfall_sum:Array(15).fill(99)},hourly:{time,snowfall:time.map(()=>0.7),temperature_2m:time.map(()=>-5)}};
 }
@@ -72,4 +72,40 @@ test('backtest never uses post-target forecasts; missing hourly values are not z
  assert.equal(r.metrics.find(x=>x.variant===PUBLISHED&&x.leadHours===24).maeCm,1);assert.equal(r.rows[0].alignment,'provisional_report_timestamp');
  assert.equal(analyzeBacktest(f,reports,{from:'2026-11-17',to:'2026-11-17',strict:true}).rows.length,0);
  const empty=analyzeBacktest([],reports,{from:'2026-11-17',to:'2026-11-17'});assert.equal(empty.metrics[0].maeCm,null);assert.ok(empty.missing.length);
+});
+
+test('five-day candidate scores only same-capture samples at 96/120h',()=>{
+ const end=Date.parse('2026-11-21T13:00:00Z')/1000;
+ const ts=Array.from({length:24},(_,i)=>end-(23-i)*3600);
+ const make=(variant,lead,amount,delay=0)=>({variant,captured_at:new Date((end-lead*3600-delay)*1000).toISOString(),pipeline_version:'test',payload:{hourly:{time:ts,snowfall:ts.map(()=>amount/24)}}});
+ const input=[make('best-match-v1',96,0),make('published-v1',96,0),make('nbm-five-day-shadow-v1',96,10),
+  make('best-match-v1',120,1),make('published-v1',120,1),make('nbm-five-day-shadow-v1',120,10,3600)];
+ const result=analyzeBacktest(input,[{payload:{reportedAtUTC:new Date(end*1000).toISOString(),snow24Cm:10}}],{from:'2026-11-21',to:'2026-11-21'});
+ const metric=(lead,variant)=>result.metrics.find(m=>m.cohort==='three-way'&&m.scope==='all paired days'&&m.leadHours===lead&&m.variant===variant);
+ assert.equal(metric(96,'best-match-v1').misses,1);
+ assert.equal(metric(96,'nbm-five-day-shadow-v1').maeCm,0);
+ assert.equal(metric(120,'nbm-five-day-shadow-v1').n,0);
+ assert.equal(result.stormTotals[0].predictedCm['nbm-five-day-shadow-v1'],10);
+});
+
+test('ski-day snowfall spans both local days and checks coverage across fall DST',async()=>{
+ const {skiDaySnow,zonedHour}=await import('../dist/hourly.js');
+ const zone='America/Denver', start=zonedHour('2026-10-31',zone,18), end=zonedHour('2026-11-01',zone,18);
+ const time=Array.from({length:(end-start)/3600},(_,i)=>start+(i+1)*3600), snowfall=time.map(()=>1);
+ assert.deepEqual(skiDaySnow({time,snowfall},'2026-11-01',zone),{overnight:13,daytime:12,total:25});
+ assert.deepEqual(skiDaySnow({time:time.slice(1),snowfall:snowfall.slice(1)},'2026-11-01',zone),{overnight:null,daytime:12,total:null});
+});
+
+test('same NBM input yields independent three and five day variants',()=>{
+ const base=pilotFixture('2026-11-17',5);
+ const nbm={hourly:{time:base.hourly.time,snowfall:base.hourly.time.map(()=>2)}};
+ const published=applyNBM(base,nbm),candidate=applyNBM(base,nbm,5);
+ assert.deepEqual(published.snowSource.days,base.daily.time.slice(0,3));
+ assert.deepEqual(candidate.snowSource.days,base.daily.time.slice(0,5));
+ assert.equal(candidate.daily.snowfall_sum[4],48);
+ assert.equal(published.daily.snowfall_sum[4],base.daily.snowfall_sum[4]);
+ const fifth=nbm.hourly.time.indexOf(zonedMidnight(base.daily.time[4],base.timezone)+3600);
+ nbm.hourly.snowfall[fifth]=null;
+ assert.throws(()=>applyNBM(base,nbm,5),/complete/);
+ assert.deepEqual(applyNBM(base,nbm),published);
 });

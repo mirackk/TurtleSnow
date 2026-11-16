@@ -142,3 +142,11 @@ For each report day, use the latest morning official 24h report. Compare the 24h
 **Measurement cutoff is not yet independently verified.** The source timestamp is only a provisional alignment, explicitly flagged in results. `--strict` excludes these samples rather than inventing a precise cutoff. Until the resort's actual measurement schedule is confirmed, do not claim calibrated accuracy from provisional MAE. No forecast snapshots before deployment exist in this archive, and the first 1–3 days will have fewer eligible lead times. Do not compare a modeled historical series to another modeled series as ground truth.
 
 A local-thread follow-up is scheduled for November 30, 2026 at 14:00 America/Denver to run this two-week analysis and report coverage/limits; it does not automatically tune or deploy. The Codex app/local host must be available and Wrangler auth valid for that local follow-up. The Cloudflare hourly archive runs independently of the desktop app.
+
+### Five-day Brighton comparison
+
+Each successful Brighton cycle can now store `nbm-five-day-shadow-v1`, a candidate using NBM snowfall in the first five local dates with Best Match thereafter. NBM requests six dates so the fifth date's final hourly interval has a timestamp. An incomplete candidate is omitted from the archive; the public three-day policy and its baseline fallback are independent. The candidate uses the existing NBM request and D1 archive, with no new database schema or paid service.
+
+The same backtest command now checks 24, 48, 72, 96 and 120 hours ahead of the report cutoff. Compare MAE and signed bias within each named cohort only; each cohort pairs the same report date and forecast capture time. The three-way cohort includes baseline, published and five-day candidate. Snow miss and false-alarm counts use a 0.5 cm threshold. Consecutive snowy-report totals require complete three-way coverage and are diagnostic; verify report-window continuity. Five local dates are not necessarily 120 NBM hours measured from capture. Missing samples and unverified official cutoffs remain visible.
+
+The page's expandable overnight view groups the existing forecast from previous 18:00 to current 18:00 local time (split at 06:00). It does not change the main calendar-day totals and does not substitute missing hours with zero.

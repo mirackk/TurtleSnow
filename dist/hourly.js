@@ -19,3 +19,29 @@ export function summarize(hours) {
   const all=k=>hours.length>0&&hours.every(h=>Number.isFinite(h[k]));
   return {snowfall:all('snowfall')?hours.reduce((s,h)=>s+h.snowfall,0):null,low:all('temperature_2m')?Math.min(...hours.map(h=>h.temperature_2m)):null,high:all('temperature_2m')?Math.max(...hours.map(h=>h.temperature_2m)):null,wind:all('wind_speed_10m')?Math.max(...hours.map(h=>h.wind_speed_10m)):null};
 }
+
+// Convert a local wall-clock time to Unix seconds, allowing real 23/25-hour days.
+export function zonedHour(date,timezone,hour=0){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw Error('Missing calendar boundary');
+ const target=Date.parse(date+'T'+String(hour).padStart(2,'0')+':00:00Z');let value=target;
+ const fmt=new Intl.DateTimeFormat('en-US',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
+ for(let i=0;i<3;i++){const p=Object.fromEntries(fmt.formatToParts(new Date(value)).map(p=>[p.type,p.value]));const wall=Date.parse(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}Z`);value+=target-wall;}
+ return value/1000;
+}
+export function skiDaySnow(hourly,day,timezone){
+ const previous=new Date(Date.parse(day+'T00:00:00Z')-86400000).toISOString().slice(0,10);
+ const start=zonedHour(previous,timezone,18), dawn=zonedHour(day,timezone,6), end=zonedHour(day,timezone,18);
+ const sum=(a,b)=>{
+  const first=hourly?.time?.indexOf(a+3600)??-1;
+  if(first<0)return null;
+  let total=0;
+  for(let t=a+3600,i=first;t<=b;t+=3600,i++){
+   const amount=hourly.snowfall?.[i];
+   if(hourly.time[i]!==t||!Number.isFinite(amount)||amount<0)return null;
+   total+=amount;
+  }
+  return total;
+ };
+ const overnight=sum(start,dawn), daytime=sum(dawn,end);
+ return {overnight,daytime,total:overnight===null||daytime===null?null:overnight+daytime};
+}

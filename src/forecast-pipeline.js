@@ -1,6 +1,7 @@
 export const PIPELINE_VERSION = '2026-11-16-nbm-pilot-v1';
 export const BASELINE = 'best-match-v1';
 export const NBM = 'nbm-native-v1';
+export const SHADOW = 'nbm-five-day-shadow-v1';
 export const PUBLISHED = 'published-v1';
 export const diagnosticFields = ['precipitation', 'rain', 'showers'];
 const formatters=new Map();
@@ -12,7 +13,7 @@ export function localDay(seconds,timezone) {
 export async function fetchNBM(location, fetcher = fetch) {
  const url = new URL('https://api.open-meteo.com/v1/forecast');
  url.search = new URLSearchParams({latitude:location.latitude,longitude:location.longitude,elevation:location.elevation,
-  models:'ncep_nbm_conus',hourly:'snowfall,precipitation,rain,temperature_2m',forecast_days:5,
+  models:'ncep_nbm_conus',hourly:'snowfall,precipitation,rain,temperature_2m',forecast_days:6,
   timezone:location.timezone,timeformat:'unixtime'});
  const response = await fetcher(url, {signal:AbortSignal.timeout(20000)});
  if (!response.ok) throw Error(`NBM HTTP ${response.status}`);
@@ -26,9 +27,9 @@ export async function fetchNBM(location, fetcher = fetch) {
 
 // Replace only complete local-day snowfall windows. Wind/temperature and longer
 // leads retain Best Match. No guessed snow multiplier or rain-to-snow conversion.
-export function applyNBM(baseline, nbm) {
+export function applyNBM(baseline, nbm, dayCount=3) {
  const h=nbm.hourly, indices=new Map(h.time.map((t,i)=>[t,i]));
- const days=baseline.daily.time.slice(0,3), replacements=new Map(),labels=baseline.hourly.time.map(t=>localDay(t-3600,baseline.timezone));
+ const days=baseline.daily.time.slice(0,dayCount), replacements=new Map(),labels=baseline.hourly.time.map(t=>localDay(t-3600,baseline.timezone));
  for(let i=0;i<baseline.hourly.time.length;i++) {
   const time=baseline.hourly.time[i];
   if(!days.includes(labels[i])) continue;
@@ -39,7 +40,7 @@ export function applyNBM(baseline, nbm) {
  if(days.some(day=>!labels.some((label,i)=>replacements.has(i)&&label===day))) throw Error('Missing pilot day');
  const hourly={...baseline.hourly,snowfall:baseline.hourly.snowfall.map((v,i)=>replacements.has(i)?replacements.get(i):v)};
  const sums=days.map(day=>Math.round([...replacements].reduce((s,[i,v])=>s+(labels[i]===day?v:0),0)*1000)/1000);
- return {...baseline,hourly,daily:{...baseline.daily,snowfall_sum:baseline.daily.snowfall_sum.map((v,i)=>i<3?sums[i]:v)},
+ return {...baseline,hourly,daily:{...baseline.daily,snowfall_sum:baseline.daily.snowfall_sum.map((v,i)=>i<dayCount?sums[i]:v)},
   snowSource:{mode:'nbm-pilot',model:'ncep_nbm_conus',days,variable:'snowfall',pipelineVersion:PIPELINE_VERSION}};
 }
 

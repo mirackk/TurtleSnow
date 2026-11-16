@@ -2,9 +2,9 @@ import { weatherStore } from './weather-store.js';
 import { refreshReports } from './reports.js';
 import { refreshSummaries, summaryBatch } from './summaries.js';
 import { feedback } from './feedback.js';
-import { hourlyFields, localDate } from '../dist/hourly.js';
+import { hourlyFields, localDate, zonedHour } from '../dist/hourly.js';
 import { resorts } from '../dist/resorts.js';
-import { fetchNBM, applyNBM, baselineSource, diagnosticFields, BASELINE, NBM, PUBLISHED } from './forecast-pipeline.js';
+import { fetchNBM, applyNBM, baselineSource, diagnosticFields, BASELINE, NBM, PUBLISHED, SHADOW } from './forecast-pipeline.js';
 import { saveForecast, pruneArchive } from './archive.js';
 export { resorts };
 const fields = ['snowfall_sum', 'temperature_2m_max', 'temperature_2m_min', 'wind_speed_10m_max'];
@@ -18,13 +18,7 @@ export function validate(data, timezone = 'America/Denver', days = 15) {
   }
   return data;
 }
-export function zonedMidnight(date,timezone){
- if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw Error('Missing calendar boundary');
- const target=Date.parse(date+'T00:00:00Z');let value=target;
- const fmt=new Intl.DateTimeFormat('en-US',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
- for(let i=0;i<3;i++){const p=Object.fromEntries(fmt.formatToParts(new Date(value)).map(p=>[p.type,p.value]));const wall=Date.parse(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}Z`);value+=target-wall;}
- return value/1000;
-}
+export const zonedMidnight = zonedHour;
 export function splitForecast(raw, timezone, now) {
   if (!raw?.daily?.time) throw new Error('Missing daily data');
   // Open-Meteo daily Unix dates use one utc_offset_seconds for the entire
@@ -68,6 +62,10 @@ export async function refresh(env, fetcher = fetch, now = () => new Date()) {
       if(key==='brighton'&&env.SNOW_PILOT==='brighton-nbm-v1') {
         try {const nbm=await fetchNBM(location,fetcher);forecast=applyNBM(baseline,nbm);variants.push([NBM,{...nbm,snowSource:{model:'ncep_nbm_conus',mode:'nbm-native'}}]);}
         catch(error) {console.error('Brighton NBM unavailable; using baseline:',error.message);forecast={...baseline,snowSource:baselineSource(error)};}
+        if (forecast.snowSource.mode==='nbm-pilot') {
+          try {variants.push([SHADOW,applyNBM(baseline,variants.find(([variant])=>variant===NBM)[1],5)]);}
+          catch(error) {console.warn('Brighton five-day candidate skipped:',error.message);}
+        }
         variants.push([PUBLISHED,forecast]);
       }
       // No TTL: the last valid forecast survives upstream outages.

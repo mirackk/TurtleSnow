@@ -1,5 +1,5 @@
 import { skiOutlook } from './outlook.js';
-import { dayHours, summarize } from './hourly.js';
+import { dayHours, summarize, skiDaySnow } from './hourly.js';
 import { brightonParking, parkingStatus } from './parking.js';
 import { resorts } from './resorts.js';
 import { translations } from './translations.js';
@@ -78,8 +78,23 @@ function renderHistory(){
   $('history-note').textContent=t('上方为官方七天累计；下图仍为逐日模型估算，累计 ','The total above is resort-reported. The daily chart below is modeled, totaling ')+snow(total)+' ('+date(h.time[0])+'–'+date(h.time[6])+t(')。统计窗口不同，不应直接相加或要求一致。',' ). Windows differ; these are separate sources, not additive.');
  }
 }
+function renderSkiDays(){
+ const panel=$('ski-days-panel');
+ if(!panel)return;
+ panel.classList.toggle('hidden',!data);
+ if(!data)return;
+ $('ski-days-toggle').textContent=t('查看跨夜降雪 · 昨晚＋今天','Overnight + daytime snowfall');
+ $('ski-days-note').textContent=t('按雪场当地时间统计：前一天 18:00 至当天 18:00。均为预报；— 表示该时段数据不完整。','Resort local time: previous day 6 PM to current day 6 PM. Forecast only; — means incomplete coverage.');
+ $('ski-days-head').innerHTML='<tr>'+[t('日期','Date'),t('前一晚','Overnight'),t('当天白天','Daytime'),t('合计','Total')].map(x=>'<th>'+x+'</th>').join('')+'</tr>';
+ const value=n=>n===null?'—':snow(n);
+ $('ski-days-rows').replaceChildren(...data.daily.time.slice(0,10).map(day=>{
+  const v=skiDaySnow(data.hourly,day,resorts[key].timezone), row=document.createElement('tr');
+  for(const text of [date(day)+' '+weekday(day),value(v.overnight),value(v.daytime),value(v.total)])row.insertCell().textContent=text;
+  return row;
+ }));
+}
 function render(){
- staticText();status();applyView();renderParking();renderHistory();renderHourly();['cm','inch'].forEach(u=>{$(u).classList.toggle('active',u===unit);$(u).setAttribute('aria-pressed',String(u===unit))});
+ staticText();status();applyView();renderParking();renderHistory();renderHourly();renderSkiDays();['cm','inch'].forEach(u=>{$(u).classList.toggle('active',u===unit);$(u).setAttribute('aria-pressed',String(u===unit))});
  if(!data){
  ['sum1','sum2','sum3'].forEach(id=>$(id).textContent='—');['range1','range2','range3'].forEach(id=>$(id).textContent=t('等待预报','Awaiting forecast'));
  $('chart').replaceChildren();$('rows').replaceChildren();$('total').textContent=t('正在加载','Loading');$('detail').textContent=failed?t('数据暂不可用；请刷新重试。','Data unavailable. Please refresh to retry.'):t('正在读取预报…','Loading forecast…');
