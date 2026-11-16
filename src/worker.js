@@ -4,6 +4,8 @@ import { refreshSummaries, summaryBatch } from './summaries.js';
 import { feedback } from './feedback.js';
 import { hourlyFields, localDate } from '../dist/hourly.js';
 import { resorts } from '../dist/resorts.js';
+import { fetchNBM, applyNBM, baselineSource, diagnosticFields, BASELINE, NBM, PUBLISHED } from './forecast-pipeline.js';
+import { saveForecast, pruneArchive } from './archive.js';
 export { resorts };
 const fields = ['snowfall_sum', 'temperature_2m_max', 'temperature_2m_min', 'wind_speed_10m_max'];
 export function validate(data, timezone = 'America/Denver', days = 15) {
@@ -43,7 +45,9 @@ export function splitForecast(raw, timezone, now) {
   const slice = (start,end) => Object.fromEntries(Object.entries(raw.daily).map(([key,values]) => [key,values.slice(start,end)]));
   const past = slice(0,7);
   const indices=h.time.flatMap((end,i)=>end>firstHour&&end<=lastHour?[i]:[]);
-  const hourly=Object.fromEntries(['time',...hourlyFields].map(k=>[k,indices.map(i=>h[k][i])]));
+  const extra=diagnosticFields.filter(k=>h[k]);
+  if(extra.some(k=>h[k].length!==h.time.length||!h[k].every(v=>v===null||(Number.isFinite(v)&&v>=0))))throw Error('Invalid precipitation diagnostics');
+  const hourly=Object.fromEntries(['time',...hourlyFields,...extra].map(k=>[k,indices.map(i=>h[k][i])]));
   if(hourly.time.length!==(lastHour-firstHour)/3600||hourly.time[0]!==firstHour+3600||hourly.time.at(-1)!==lastHour)throw new Error('Missing hourly forecast coverage');
   return { ...raw, daily_units: {...raw.daily_units, time: 'iso8601'}, hourly, daily: slice(7,22), history: { daily: past, snowfallTotal: past.snowfall_sum.reduce((a,b)=>a+b,0), source: 'archived_forecast', completeDays: 7 } };
 }
@@ -55,12 +59,19 @@ export async function refresh(env, fetcher = fetch, now = () => new Date()) {
     const attemptedAt = now().toISOString();
     try {
       const url = new URL('https://api.open-meteo.com/v1/forecast');
-      url.search = new URLSearchParams({ latitude: location.latitude, longitude: location.longitude, elevation: location.elevation, daily: fields.join(','), timezone: location.timezone, forecast_days: 16, past_days: 7, hourly: hourlyFields.join(','), timeformat: 'unixtime', temperature_unit: 'celsius', wind_speed_unit: 'kmh' });
+      url.search = new URLSearchParams({ latitude: location.latitude, longitude: location.longitude, elevation: location.elevation, daily: fields.join(','), timezone: location.timezone, forecast_days: 16, past_days: 7, hourly: [...hourlyFields,...(key==='brighton'?diagnosticFields:[])].join(','), timeformat: 'unixtime', temperature_unit: 'celsius', wind_speed_unit: 'kmh' });
       const response = await fetcher(url, { signal: AbortSignal.timeout(20000) });
       if (!response.ok) throw new Error(`Upstream HTTP ${response.status}`);
-      const forecast = splitForecast(await response.json(), location.timezone, now());
+      const baseline = {...splitForecast(await response.json(), location.timezone, now()),snowSource:baselineSource()};
+      let forecast=baseline;
+      const variants=[[BASELINE,baseline]];
+      if(key==='brighton'&&env.SNOW_PILOT==='brighton-nbm-v1') {
+        try {const nbm=await fetchNBM(location,fetcher);forecast=applyNBM(baseline,nbm);variants.push([NBM,{...nbm,snowSource:{model:'ncep_nbm_conus',mode:'nbm-native'}}]);}
+        catch(error) {console.error('Brighton NBM unavailable; using baseline:',error.message);forecast={...baseline,snowSource:baselineSource(error)};}
+        variants.push([PUBLISHED,forecast]);
+      }
       // No TTL: the last valid forecast survives upstream outages.
-      await weatherStore(env).put(`forecast:${key}`, JSON.stringify({ ...forecast, updatedAt: now().toISOString() }));
+      await saveForecast(env,key,{...forecast,updatedAt:now().toISOString()},location,variants);
       // A successful snapshot timestamp also records success; avoid a second database write.
     } catch (error) {
       await weatherStore(env).put(`status:${key}`, JSON.stringify({ attemptedAt, ok: false, error: String(error.message).slice(0,180) }));
@@ -89,12 +100,13 @@ export default {
     if (!forecast) return Response.json({ error: 'Forecast not initialized' }, { status: 503, headers: { ...headers, 'Retry-After': '300' } });
     const status = savedStatus && Date.parse(savedStatus.attemptedAt)>Date.parse(forecast.updatedAt) ? savedStatus : {attemptedAt:forecast.updatedAt,ok:true};
     const stale = Date.now() - Date.parse(forecast.updatedAt) > 90 * 60 * 1000 || status?.ok === false;
-    return Response.json({ ...forecast, summary, report: report ? {...report, stale: reportStatus?.ok === false || Date.now()-Date.parse(report.fetchedAt)>2*3600000} : null, stale, lastAttemptAt: status?.attemptedAt || null, lastRefreshOk: status?.ok ?? null }, { headers });
+    return Response.json({ ...forecast, summary, report: report ? {...report, stale: reportStatus?.ok === false || Date.now()-Date.parse(report.fetchedAt)>2*3600000 || (report.reportedAtUTC && Date.now()-Date.parse(report.reportedAtUTC)>36*3600000)} : null, stale, lastAttemptAt: status?.attemptedAt || null, lastRefreshOk: status?.ok ?? null }, { headers });
   },
   async scheduled(controller, env, ctx) {
     if (controller.cron === '30 */12 * * *' || controller.cron === '35 */12 * * *') { await refreshSummaries(env,()=>new Date(),summaryBatch(controller.cron.startsWith('30')?0:1)); return; }
     const results = await refresh(env);
     await refreshReports(env);
+    if(new Date(controller.scheduledTime??Date.now()).getUTCHours()===0)await pruneArchive(env);
     if (results.some(r => r.status === 'rejected')) throw new Error('One or more forecasts failed to refresh');
   }
 };

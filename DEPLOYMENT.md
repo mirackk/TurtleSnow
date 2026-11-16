@@ -79,3 +79,16 @@ The old Sites demo remains on its original deployment. The new cached implementa
 - Browser verified weather default, Parking active state, independent visibility, return to weather, and resort-switch fallback. At 390px, document width is 390px with no horizontal page overflow.
 - Availability follow-up found `/calendar-availability` and `/calendar-rates` in the public Inflow client. The actual official Get started flow requires an Inflow account before calendar access. Anonymous third-party API access and pricing remain unconfirmed; no live inventory API is integrated.
 - Runtime version: 084e1c0d-30b6-4024-8b68-6ae72dec7d18.
+
+
+## November 16, 2026 — Brighton NBM verification pilot
+
+- Applied weather migration `0002_verification_archive.sql` to existing free D1 database; no plan change or new paid service.
+- Production Worker version `774448fe-9473-4719-bd56-52f133998e2c` deployed with hourly weather and existing twice-daily AI batch schedules; `SNOW_PILOT=brighton-nbm-v1`.
+- 38 Node tests pass. Coverage includes 23/25-hour NBM daily aggregation, null/429/outage fallback, source report consistency checks, revision hashing, bounded retention and anti-hindsight paired backtest scoring.
+- Initial live seed inserted 18 compact forecast archive rows (16 baseline, Brighton published and NBM) plus two official reports, through the same archive writers as Cron. Database size after seed 0.39 MB. Brighton first-three-day snow: 0,34.7,2.52cm as of `2026-11-16T21:32:43.277Z`. This is source verification, not evidence that NBM is more accurate.
+- Anonymous HTTP with a standard browser User-Agent returns 200 for forecast API. Brighton response labels `nbm-pilot` and correct pilot dates; official 7d is 12.7cm, reported `2026-11-16T11:55:26Z`. A default Python User-Agent received 403, while a standard browser User-Agent and the actual browser load succeed; no authentication was used.
+- Production browser displays official cumulative history separately from the 7.3cm modeled daily-history chart, and source details explain the first-three-local-day snow-only pilot. cm/inch switching works. Existing AI cache from the previous pipeline is replaced by current-data rule fallback until the next scheduled AI generation.
+- End-to-end read-only CLI smoke: `node scripts/backtest.mjs --resort brighton --from 2026-11-16 --to 2026-11-16 --remote --out backtests/deployment-smoke` exported three Brighton snapshots and one report, generated JSON/CSV/Markdown, and correctly yielded zero eligible comparisons (capture happened after the report). Missing combinations are recorded rather than scored as zero error.
+- Thread follow-up automation `turtlesnow` scheduled for November 30 at 14:00 America/Denver, to export November 17–30, inspect provisional alignment and strict sample counts, compare paired 24/48/72h performance, and stop after reporting. Local app/host availability and valid Wrangler OAuth are required for that follow-up; Cloudflare archive collection is independent.
+- Measurement cutoff remains unverified. No blanket snowfall multiplier, claim of proven accuracy, or automatic future recalibration is introduced. Sixty-day compact retention bounds storage.

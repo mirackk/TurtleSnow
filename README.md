@@ -114,3 +114,31 @@ Apply weather migrations using `wrangler d1 migrations apply turtlesnow-weather 
 Added Arapahoe Basin, Aspen Snowmass, Big Sky, Jackson Hole, Mount Snow, Okemo and Snowbasin. Aspen Snowmass uses an explicitly labeled Snowmass forecast point, not a forecast averaged over all four Aspen mountains. New elevations are representative model heights, not official snow stakes. Official base/new-snow feeds remain connected only for Brighton/Alta; missing metrics are not invented for new resorts.
 
 Weather refreshes all sixteen resorts hourly with three requests in flight. AI runs in two non-overlapping alphabetical batches of eight, five minutes apart, every twelve hours; the shared daily claim cap is 32, with one attempt per resort per twelve-hour slot. Output remains capped at 1,000 tokens and fact inputs bounded. This is expected to fit the daily free AI allowance under normal use, but other account workloads share quotas. No paid upgrade is enabled.
+
+
+## November 16: Brighton NBM pilot and reproducible verification
+
+Pipeline version `2026-11-16-nbm-pilot-v1`. The `SNOW_PILOT=brighton-nbm-v1` variable enables NOAA NBM CONUS (`ncep_nbm_conus`) **snowfall only** for Brighton's first three full local calendar days (today plus two); dates after that and temperature/wind retain Best Match. NBM supplies native model snowfall rather than a hand-tuned blanket multiplier. Complete hourly coverage and units are required before adopting any pilot day. A timeout, 429, missing/null interval or malformed response falls back to the newly fetched baseline, visibly labeled in source details. This is an experiment, not a validated accuracy claim. Other fifteen resorts retain their original forecast source. Both daily totals and hourly snow use the same NBM intervals; DST days have 23/25 hours.
+
+Brighton's official 7-day total now appears separately from the explicitly modeled daily history chart; these windows need not match. Official inches retain precision (5in = 12.7cm), source timestamps and retrieval timestamps remain distinct, and contradictory rolling fields are flagged. Reports older than 36h are marked old even if just fetched. AI summaries from the old Brighton pipeline are not displayed until regenerated at the normal 12h slot; rule fallback uses the current forecast.
+
+Apply `weather-migrations/0002_verification_archive.sql` before deploying. Hourly jobs batch snapshot/cache writes into the same D1 transaction. `forecast_archive` saves every successful hourly daily forecast for all sixteen resorts. Brighton additionally saves hourly snow/precipitation/rain/showers/temperature for baseline, published, and available raw NBM variants, with captured availability timestamps, requested/grid point coordinates, pipeline version and explicit unknown model initialization time. It never pretends that fetching an API response is the model initialization time. `report_archive` deduplicates unchanged source reports, preserves corrected versions by hash, and retains first/last seen timestamps. No public archive/admin endpoint exists. Visitors still only read snapshots; the pilot adds **one scheduled Open-Meteo request/hour**, not one per visitor. Model/variable weighting applies to upstream quotas.
+
+The midnight UTC job removes archive records older than 60 days. Compact payloads omit full histories and most hourly fields outside Brighton, keeping the initial 16-resort pilot comfortably below a 500MB D1 database under expected payload sizes. Check actual storage before expanding hourly archiving to more resorts. No paid service/plan was enabled; quota exhaustion uses existing fallback paths. `scripts/seed-cache.mjs` now uses the same archive writers for initial live seeding and does not backdate snapshots.
+
+### One-command backtest
+
+From this repository with Node 24 and Wrangler OAuth available:
+
+```sh
+npm run backtest -- --resort brighton --from 2026-11-17 --to 2026-11-30 --remote
+npm run backtest -- --resort brighton --from 2026-11-17 --to 2026-11-30 --remote --strict --out backtests/brighton-strict
+```
+
+The command performs read-only paginated D1 exports and writes `report.md`, `comparison.csv`, `results.json`, `raw-forecasts.json` and `raw-reports.json` under ignored `backtests/`. It needs no pasted token. It never triggers weather/model calls, trains a correction, or deploys changes. Maximum date span is 60 days. Other resorts currently have daily archives only; Brighton is the hourly verification pilot.
+
+For each report day, use the latest morning official 24h report. Compare the 24h interval ending at its source timestamp against the latest snapshot available **at least 24/48/72 hours before that end**, with at most 90 minutes schedule tolerance; never admit post-target forecasts. Require complete hourly coverage; null/missing samples are excluded, not converted to zero. Sub-hour boundaries prorate intervals. Report revisions and missing combinations remain inspectable in raw JSON/results. Primary MAE and bias compare baseline/published on identical eligible days, including a separate snow-active subset, so dry days do not hide missed snow. Bias is predicted minus reported; missing eligibility is not perfect performance. NBM diagnostic counts may differ and are labeled separately.
+
+**Measurement cutoff is not yet independently verified.** The source timestamp is only a provisional alignment, explicitly flagged in results. `--strict` excludes these samples rather than inventing a precise cutoff. Until the resort's actual measurement schedule is confirmed, do not claim calibrated accuracy from provisional MAE. No forecast snapshots before deployment exist in this archive, and the first 1–3 days will have fewer eligible lead times. Do not compare a modeled historical series to another modeled series as ground truth.
+
+A local-thread follow-up is scheduled for November 30, 2026 at 14:00 America/Denver to run this two-week analysis and report coverage/limits; it does not automatically tune or deploy. The Codex app/local host must be available and Wrangler auth valid for that local follow-up. The Cloudflare hourly archive runs independently of the desktop app.

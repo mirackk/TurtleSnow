@@ -4,6 +4,7 @@
   "main": "src/worker.js",
   "compatibility_date": "2026-10-15",
   "workers_dev": true,
+  "vars": {"SNOW_PILOT":"brighton-nbm-v1"},
   "account_id": "43b5ffa383e06b416f11a0e935fe7b79",
   "assets": {
     "directory": "./dist",

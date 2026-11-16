@@ -3,6 +3,7 @@ import { dayHours, summarize } from './hourly.js';
 import { brightonParking, parkingStatus } from './parking.js';
 import { resorts } from './resorts.js';
 import { translations } from './translations.js';
+import { officialWeek } from './snow-sources.js';
 const $=id=>document.getElementById(id);
 const saved=k=>{try{return localStorage.getItem(k)}catch{return null}};
 const save=(k,v)=>{try{localStorage.setItem(k,v)}catch{}};
@@ -58,7 +59,8 @@ function detail(){
 function renderHistory(){
  if(!$('history-title'))return; // Tolerate an older HTML document during asset propagation.
  $('history-title').textContent=t('过去 7 天降雪','Past 7 days snowfall');
- $('history-badge').textContent=t('截至昨日 · 雪场当地时间','Through yesterday · Resort local time');
+ const official=officialWeek(data?.report);
+ $('history-badge').textContent=official?t('官方累计 · 下图为模型估算','Official total · Modeled daily chart'):t('截至昨日 · 雪场当地时间','Through yesterday · Resort local time');
  $('history-label').textContent=t('7 天累计新增降雪','7-day snowfall total');
  $('history-note').textContent=t('历史天气模型估算（归档预报），不是雪场实测或现有积雪厚度；仅统计所示日期的 7 个完整自然日，不含今天。','Historical model estimates (archived forecasts), not resort measurements or current snow depth. Covers the seven complete local calendar days shown, excluding today.');
  const h=data?.history?.daily;
@@ -69,6 +71,12 @@ function renderHistory(){
  $('history-total').innerHTML=num(total)+`<span>${unit==='inch'?'in':'cm'}</span>`;
  $('history-range').textContent=date(h.time[0])+' – '+date(h.time[6]);
  $('history-days').innerHTML=h.time.map((day,i)=>`<div class="history-day" aria-label="${day}, ${t('历史模型降雪','historical modeled snowfall')} ${snow(h.snowfall_sum[i])}"><div class="history-bar-space"><span class="bar-value">${num(h.snowfall_sum[i])}</span><div class="history-bar" style="height:${Math.max(3,h.snowfall_sum[i]/max*64)}px"></div></div><div class="weekday">${weekday(day)}</div><div class="date">${date(day)}</div></div>`).join('');
+ if(official){
+  $('history-label').textContent=t('雪场报告 · 过去 7 天','Resort-reported · Past 7 days');
+  $('history-total').innerHTML=num(official.total)+`<span>${unit==='inch'?'in':'cm'}</span>`;
+  $('history-range').textContent=t('官方报告时间：','Reported: ')+new Date(official.reportedAt).toLocaleString(locale(),{timeZone:resorts[key].timezone,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+(official.stale?t(' · 旧报告',' · Old report'):'');
+  $('history-note').textContent=t('上方为官方七天累计；下图仍为逐日模型估算，累计 ','The total above is resort-reported. The daily chart below is modeled, totaling ')+snow(total)+' ('+date(h.time[0])+'–'+date(h.time[6])+t(')。统计窗口不同，不应直接相加或要求一致。',' ). Windows differ; these are separate sources, not additive.');
+ }
 }
 function render(){
  staticText();status();applyView();renderParking();renderHistory();renderHourly();['cm','inch'].forEach(u=>{$(u).classList.toggle('active',u===unit);$(u).setAttribute('aria-pressed',String(u===unit))});
@@ -170,7 +178,7 @@ function renderParking(){
 
 function renderExperience(){
  const outlook=skiOutlook(data,{lang,snow,date,timezone:resorts[key].timezone}),s=data.summary;
- const usable=s?.windowDays===7&&Date.now()-Date.parse(s.generatedAt)<24*3600000&&s.forecastDates?.[0]===data.daily.time[0]&&s[lang]?.text;
+ const usable=s?.windowDays===7&&(key!=='brighton'||s.pipelineVersion===data.snowSource?.pipelineVersion)&&Date.now()-Date.parse(s.generatedAt)<24*3600000&&s.forecastDates?.[0]===data.daily.time[0]&&s[lang]?.text;
  const stamp=v=>new Date(v).toLocaleString(locale(),{timeZone:resorts[key].timezone,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'});
  $('summary-intro').textContent=t('先看这一段，快速了解过去七天与未来七天的滑雪体验。','Start here — the past week and next week, without decoding the charts.');
  $('outlook-title').textContent=usable&&!/closed|outlook$|关闭|停业|预报$|展望$/i.test(s[lang].headline)?s[lang].headline:outlook.title;
@@ -181,11 +189,17 @@ function renderExperience(){
  if(data.stale)$('outlook-stamp').textContent+=t(' · 天气数据已过期',' · Weather data is stale');
  const report=data.report;
  $('summary-status').textContent=report?.status==='Closed'?t('官方报告：雪场关闭。以下仅为天气展望，不代表当前可滑。','Official report: resort closed. This is a weather outlook, not current skiability.'):report?.status==='outside_winter'?t('官网目前非冬季雪况模式；以下仅为天气展望。','The official site is outside winter reporting mode; this is a weather outlook.'):'';
- const history=data.history?.daily?.snowfall_sum?.slice(-7),recent=history?.length===7&&history.every(Number.isFinite)?history.reduce((a,b)=>a+b,0):null;
- const items=[[t('过去 7 个完整日','Past 7 complete days'),recent,t('模型估算','Modeled snow')],[t('未来 7 天','Next 7 days'),data.daily.snowfall_sum.slice(0,7).reduce((a,b)=>a+b,0),t('预报新增降雪','Forecast new snow')],[t('Base / 基础雪深','Base depth'),report?.baseCm,t('雪场官方报告','Resort-reported')],[t('官方过去 24 小时','Official past 24h'),report?.snow24Cm,t('雪场报告新增降雪','Resort-reported new snow')]];
+ const history=data.history?.daily?.snowfall_sum?.slice(-7),recent=history?.length===7&&history.every(Number.isFinite)?history.reduce((a,b)=>a+b,0):null,official=officialWeek(report);
+ const items=[[official?t('官方过去 7 天','Official past 7 days'):t('过去 7 个完整日','Past 7 complete days'),official?.total??recent,official?(official.stale?t('旧官方报告','Older resort report'):t('雪场报告累计','Resort-reported total')):t('模型估算','Modeled snow')],[t('未来 7 天','Next 7 days'),data.daily.snowfall_sum.slice(0,7).reduce((a,b)=>a+b,0),t('预报新增降雪','Forecast new snow')],[t('Base / 基础雪深','Base depth'),report?.baseCm,t('雪场官方报告','Resort-reported')],[t('官方过去 24 小时','Official past 24h'),report?.snow24Cm,t('雪场报告新增降雪','Resort-reported new snow')]];
  $('summary-facts').replaceChildren(...items.map(([label,value,note])=>{const div=document.createElement('div');div.className='summary-fact';const a=document.createElement('span'),b=document.createElement('strong'),c=document.createElement('span');a.textContent=label;b.textContent=Number.isFinite(value)?snow(value):'—';c.textContent=Number.isFinite(value)?note:t('暂未公布／未接入','Not published / not connected');div.append(a,b,c);return div}));
  $('summary-source').replaceChildren();
  if(report){const a=document.createElement('a');a.href=report.url;a.target='_blank';a.rel='noreferrer';a.textContent=t('官方雪况 ↗','Official snow report ↗');$('summary-source').append(a,document.createTextNode(t(' · 报告时间：',' · Report time: ')+report.reportedAt+t(' · 获取于 ',' · Retrieved ')+stamp(report.fetchedAt)+(report.stale?t(' · 旧数据，请查官网',' · Old data; verify officially'):'')+(report.seasonHidden?t(' · 官网暂未公布冬季雪量指标',' · Winter snow metrics are not currently published'):'')+t('。雪深不代表所有区域覆盖。','. Base depth does not establish coverage across terrain.')))}
  else $('summary-source').textContent=t('此雪场的官方 base 和实测新增降雪尚未接入；不以模型估算替代。','Official base depth and observed new snow are not connected for this resort; model estimates are not substituted.');
  $('summary-details-label').textContent=t('查看依据与数据局限','See supporting data and limitations');$('summary-reasoning').textContent=outlook.paragraphs.join('\n\n');
+ if(key==='brighton'){
+  const pilot=data.snowSource?.mode==='nbm-pilot';
+  const note=pilot?t('Brighton 降雪试点：今天起 3 个当地自然日采用 NOAA NBM 原生降雪，其后采用原模型；气温和风速仍采用原模型。两套预报同步归档对照，尚未证明试点更准确。','Brighton snow pilot: NOAA NBM snowfall for today and the next two local days; the original model thereafter. Temperature and wind retain the original source. Both snow forecasts are archived for comparison; improved accuracy is not yet established.'):t('Brighton 降雪目前采用原模型；NBM 试点数据不可用时自动回退。','Brighton snowfall currently uses the original model; this is the fallback when NBM pilot data is unavailable.');
+  $('summary-reasoning').textContent+='\n\n'+note;
+  $('forecast-note').textContent=pilot?t('Brighton：近期 3 天降雪采用 NOAA NBM 试点，其后为原模型；均为预报，非实测。','Brighton: first 3 local days of snowfall use the NOAA NBM pilot, then the original model. Forecasts, not measurements.'):t('Brighton：NBM 试点暂不可用，已使用原模型降雪预报。','Brighton: NBM pilot unavailable; using the original snowfall forecast.');
+ }
 }

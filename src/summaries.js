@@ -44,7 +44,7 @@ export async function refreshSummaries(env,now=()=>new Date(),keys=Object.keys(r
    const raw=result.response??result.choices?.[0]?.message?.content;
    const text=validateSummary(raw,facts.officialStatus);
    if(/\bdry\b|干燥|reports? (?:no |new )?snow|no recent snowfall|currently (?:has |experiencing )?(?:no )?snow|remain closed|forecast[^.]*closed|modeled snow is expected|风况变化不定/i.test(text.en.text+' '+text.en.headline+' '+text.zh.text))throw Error('Unsupported condition claim');
-   await weatherStore(env).put('summary:'+key,JSON.stringify({...text,model:MODEL,generatedAt:now().toISOString(),forecastAt:forecast.updatedAt,windowDays:7,historyDates:forecast.history?.daily?.time?.slice(-7)??[],forecastDates:forecast.daily.time.slice(0,7)}));
+   await weatherStore(env).put('summary:'+key,JSON.stringify({...text,model:MODEL,pipelineVersion:forecast.snowSource?.pipelineVersion??null,generatedAt:now().toISOString(),forecastAt:forecast.updatedAt,windowDays:7,historyDates:forecast.history?.daily?.time?.slice(-7)??[],forecastDates:forecast.daily.time.slice(0,7)}));
   }catch(error){console.error('AI summary retained/fallback: '+key+' '+error.message)}
  }
 }
